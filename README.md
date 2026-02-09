@@ -90,6 +90,53 @@ python src/main.py crawl --school "Los Angeles Trade-Technical College"
 python scripts/check_db.py
 ```
 
+## 🐳 Docker로 실행하기
+
+Docker를 사용하면 환경 설정 없이 바로 실행할 수 있습니다.
+
+### 로컬 개발 환경 (PostgreSQL 포함)
+
+```bash
+# 환경 시작
+docker compose -f docker-compose-local.yml up -d
+
+# 로그 확인
+docker compose -f docker-compose-local.yml logs -f
+
+# 크롤링 실행
+docker compose -f docker-compose-local.yml exec crawler-local python src/main.py crawl --limit 5
+
+# 환경 종료
+docker compose -f docker-compose-local.yml down
+```
+
+### 프로덕션 배포
+
+```bash
+# 이미지 빌드 및 푸시
+docker build -t patrick5471/college-crawler:latest .
+docker push patrick5471/college-crawler:latest
+
+# 서버에서 실행
+docker compose up -d
+```
+
+**상세 가이드**: [README.Docker.md](README.Docker.md)
+
+## 🔄 CI/CD
+
+GitHub Actions를 통한 자동 배포가 구성되어 있습니다.
+
+`main` 브랜치에 푸시하면:
+1. ✅ Python 의존성 설치 및 테스트
+2. 🐳 Docker 이미지 빌드
+3. 📤 Docker Hub에 푸시
+4. 🚀 서버에 자동 배포
+
+**필요한 GitHub Secrets**:
+- `DOCKER_USERNAME`, `DOCKER_PASSWORD`
+- `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`
+
 ## 프로젝트 구조
 
 ```
