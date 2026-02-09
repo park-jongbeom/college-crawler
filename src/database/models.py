@@ -6,7 +6,6 @@ from sqlalchemy import Column, String, Integer, Text, Boolean, TIMESTAMP, Foreig
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from pgvector.sqlalchemy import Vector
 import uuid
 
 from .connection import Base
@@ -87,7 +86,7 @@ class SchoolDocument(Base):
     document_type = Column(String(50), nullable=False)  # 'history', 'environment', 'detailed_info'
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
-    embedding = Column(Vector(1536), nullable=True)  # OpenAI embedding dimension
+    # embedding은 ga-api-platform에서 Gemini로 생성. 크롤러는 텍스트만 저장.
     doc_metadata = Column('metadata', JSONB)  # 'metadata'는 SQLAlchemy 예약어이므로 컬럼명 매핑
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
