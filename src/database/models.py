@@ -6,6 +6,7 @@ from sqlalchemy import Column, String, Integer, Text, Boolean, TIMESTAMP, Foreig
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from pgvector.sqlalchemy import Vector
 import uuid
 
 from .connection import Base
@@ -86,7 +87,7 @@ class SchoolDocument(Base):
     document_type = Column(String(50), nullable=False)  # 'history', 'environment', 'detailed_info'
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
-    embedding = Column('embedding', nullable=False)  # vector type (pgvector)
+    embedding = Column(Vector(1536), nullable=True)  # OpenAI embedding dimension
     doc_metadata = Column('metadata', JSONB)  # 'metadata'는 SQLAlchemy 예약어이므로 컬럼명 매핑
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
@@ -106,17 +107,17 @@ class AuditLog(Base):
     table_name = Column(String(255), nullable=False)
     record_id = Column(UUID(as_uuid=True), nullable=False)
     action = Column(String(255), nullable=False)  # 'CREATE', 'UPDATE', 'DELETE', 'CRAWL'
-    actor_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+    actor_id = Column(UUID(as_uuid=True))  # FK to users removed for local dev
     old_value = Column(JSONB)
     new_value = Column(JSONB)
     after_data = Column(Text)
     before_data = Column(Text)
-    ip_address = Column(String(255), nullable=False)
-    user_id = Column(UUID(as_uuid=True), nullable=False)
+    ip_address = Column(String(255))
+    user_id = Column(UUID(as_uuid=True))
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
-    updated_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+    created_by = Column(UUID(as_uuid=True))  # FK to users removed for local dev
+    updated_by = Column(UUID(as_uuid=True))  # FK to users removed for local dev
     
     def __repr__(self):
         return f"<AuditLog(id={self.id}, table='{self.table_name}', action='{self.action}')>"

@@ -42,6 +42,7 @@ services:
       - ./data/crawled:/app/data/crawled
       - ./logs:/app/logs
       - ./src:/app/src  # Mount source for live reload
+      - ./scripts:/app/scripts  # Mount scripts for database setup
     depends_on:
       postgres-local:
         condition: service_healthy
