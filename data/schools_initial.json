@@ -1,0 +1,224 @@
+{
+  "schools": [
+    {
+      "name": "Los Angeles Trade-Technical College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "Los Angeles",
+      "website": "https://lattc.edu",
+      "international_email": "iso@lattc.edu",
+      "international_phone": "+1-213-763-7170",
+      "tuition": 11000,
+      "description": "직업 중심 Associate Degree 제공. Automotive, Welding, Construction, Culinary Arts, Electrical Systems 전공 강점"
+    },
+    {
+      "name": "Pasadena City College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "Pasadena",
+      "website": "https://pasadena.edu",
+      "international_email": "international@pasadena.edu",
+      "international_phone": "+1-626-585-7347",
+      "tuition": 11000,
+      "description": "Nursing, Health Sciences, Business Administration, Engineering Technology, Computer Science 전공"
+    },
+    {
+      "name": "Santa Monica College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "Santa Monica",
+      "website": "https://smc.edu",
+      "international_email": "isss@smc.edu",
+      "international_phone": "+1-310-434-4100",
+      "tuition": 11000,
+      "description": "Film & Media, Interaction Design, Business, Hospitality Management"
+    },
+    {
+      "name": "Irvine Valley College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "Irvine",
+      "website": "https://ivc.edu",
+      "international_email": "international@ivc.edu",
+      "international_phone": "+1-949-451-5414",
+      "tuition": 10500,
+      "description": "Nursing, Biotechnology, Paralegal Studies, Computer Networking"
+    },
+    {
+      "name": "De Anza College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "Cupertino",
+      "website": "https://deanza.edu",
+      "international_email": "international@deanza.edu",
+      "international_phone": "+1-408-864-8826",
+      "tuition": 10500,
+      "description": "Software Engineering, Data Science, Graphic Design, Business Information Systems"
+    },
+    {
+      "name": "Mt. San Antonio College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "Walnut",
+      "website": "https://mtsac.edu",
+      "international_email": "international@mtsac.edu",
+      "international_phone": "+1-909-274-5243",
+      "tuition": 10500,
+      "description": "Aviation Maintenance, Aircraft Pilot, Fire Technology, Supply Chain Management"
+    },
+    {
+      "name": "Orange Coast College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "Costa Mesa",
+      "website": "https://occ.cccd.edu",
+      "international_email": "international@occ.cccd.edu",
+      "international_phone": "+1-714-432-5940",
+      "tuition": 11000,
+      "description": "Culinary Arts, Baking & Pastry, Hotel & Tourism, Fashion Design"
+    },
+    {
+      "name": "San Diego Miramar College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "San Diego",
+      "website": "https://sdmiramar.edu",
+      "international_email": "international@sdccd.edu",
+      "international_phone": "+1-619-388-7373",
+      "tuition": 10000,
+      "description": "Advanced Manufacturing, Cybersecurity, Drone Technology, Automotive"
+    },
+    {
+      "name": "Fullerton College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "Fullerton",
+      "website": "https://fullcoll.edu",
+      "international_email": "international@fullcoll.edu",
+      "international_phone": "+1-714-992-7078",
+      "tuition": 11000,
+      "description": "Music Industry, Film & TV Production, Business, Health Science"
+    },
+    {
+      "name": "Bakersfield College",
+      "type": "Community College",
+      "state": "CA",
+      "city": "Bakersfield",
+      "website": "https://bakersfieldcollege.edu",
+      "international_email": "international@bakersfieldcollege.edu",
+      "international_phone": "+1-661-395-4850",
+      "tuition": 9500,
+      "description": "Industrial Automation, Oil & Energy Technology, Welding, Nursing"
+    },
+    {
+      "name": "Houston Community College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "Houston",
+      "website": "https://hccs.edu",
+      "international_email": "international@hccs.edu",
+      "international_phone": "+1-713-718-8521",
+      "tuition": 10500,
+      "description": "Nursing, Process Technology, Culinary Arts, Cybersecurity"
+    },
+    {
+      "name": "Dallas College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "Dallas",
+      "website": "https://dallascollege.edu",
+      "international_email": "international@dallascollege.edu",
+      "international_phone": "+1-214-378-1500",
+      "tuition": 9500,
+      "description": "Logistics & Supply Chain, IT / Cloud Computing, Automotive Technology, Business"
+    },
+    {
+      "name": "Austin Community College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "Austin",
+      "website": "https://austincc.edu",
+      "international_email": "international@austincc.edu",
+      "international_phone": "+1-512-223-7001",
+      "tuition": 9500,
+      "description": "Software Development, UX/UI Design, Biotechnology, Advanced Manufacturing"
+    },
+    {
+      "name": "Lone Star College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "Houston",
+      "website": "https://lonestar.edu",
+      "international_email": "international@lonestar.edu",
+      "international_phone": "+1-281-290-3700",
+      "tuition": 10000,
+      "description": "Nursing, Construction Management, Energy Technology, IT Support"
+    },
+    {
+      "name": "Tarrant County College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "Fort Worth",
+      "website": "https://tccd.edu",
+      "international_email": "international@tccd.edu",
+      "international_phone": "+1-817-515-1550",
+      "tuition": 9500,
+      "description": "Aviation Maintenance, Logistics, Mechatronics, Healthcare"
+    },
+    {
+      "name": "San Jacinto College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "Pasadena",
+      "website": "https://sanjac.edu",
+      "international_email": "international@sjcd.edu",
+      "international_phone": "+1-281-998-6150",
+      "tuition": 10000,
+      "description": "Process Technology, Maritime Transportation, Welding, Instrumentation"
+    },
+    {
+      "name": "El Paso Community College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "El Paso",
+      "website": "https://epcc.edu",
+      "international_email": "international@epcc.edu",
+      "international_phone": "+1-915-831-2617",
+      "tuition": 8500,
+      "description": "Manufacturing, Automotive, Computer Science, Health Sciences"
+    },
+    {
+      "name": "Palo Alto College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "San Antonio",
+      "website": "https://alamo.edu/pac",
+      "international_email": "international@alamo.edu",
+      "international_phone": "+1-210-486-3000",
+      "tuition": 9000,
+      "description": "Cybersecurity, Business, Public Safety"
+    },
+    {
+      "name": "San Antonio College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "San Antonio",
+      "website": "https://alamo.edu/sac",
+      "international_email": "international@alamo.edu",
+      "international_phone": "+1-210-486-0000",
+      "tuition": 9000,
+      "description": "Automotive, Culinary Arts, HVAC, Health Professions"
+    },
+    {
+      "name": "Collin College",
+      "type": "Community College",
+      "state": "TX",
+      "city": "Plano",
+      "website": "https://collin.edu",
+      "international_email": "international@collin.edu",
+      "international_phone": "+1-972-881-5790",
+      "tuition": 9500,
+      "description": "Computer Networking, Finance, Engineering Technology"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+name: Deploy College Crawler
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'alembic.ini'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          # Add test commands here when tests are available
+          # pytest tests/
+          echo "Tests passed (placeholder)"
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -f Dockerfile -t patrick5471/college-crawler:latest .
+          for i in 1 2 3; do
+            echo "Docker push attempt $i..."
+            if docker push patrick5471/college-crawler:latest; then
+              echo "Docker push succeeded"
+              break
+            fi
+            if [ "$i" -eq 3 ]; then
+              echo "Docker push failed after 3 attempts"
+              exit 1
+            fi
+            sleep $((i * 10))
+          done
+
+      - name: Copy docker-compose.yml to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "/home/${{ secrets.SERVER_USER }}/college-crawler"
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            # Create directory if not exists
+            mkdir -p /home/${{ secrets.SERVER_USER }}/college-crawler
+            cd /home/${{ secrets.SERVER_USER }}/college-crawler
+            
+            # Determine docker-compose command
+            if command -v docker-compose &> /dev/null; then
+              DOCKER_COMPOSE_CMD="docker-compose"
+            elif command -v docker &> /dev/null && docker compose version &> /dev/null 2>&1; then
+              DOCKER_COMPOSE_CMD="docker compose"
+            else
+              echo "Docker Compose not found. Installation required."
+              exit 1
+            fi
+            
+            echo "Using: $DOCKER_COMPOSE_CMD"
+            
+            # Stop and remove existing container
+            echo "Stopping existing college-crawler container..."
+            $DOCKER_COMPOSE_CMD stop college-crawler || true
+            $DOCKER_COMPOSE_CMD rm -f college-crawler || true
+            
+            # Pull latest image with retry logic
+            echo "Pulling latest image for college-crawler..."
+            MAX_ATTEMPTS=3
+            ATTEMPT=1
+            while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS: Pulling college-crawler..."
+              if timeout 120 $DOCKER_COMPOSE_CMD pull college-crawler 2>&1; then
+                echo "Successfully pulled college-crawler"
+                break
+              fi
+              if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+                WAIT_TIME=$((ATTEMPT * 10))
+                echo "Pull failed. Waiting ${WAIT_TIME}s before retry..."
+                sleep $WAIT_TIME
+              else
+                echo "Warning: Failed to pull college-crawler after $MAX_ATTEMPTS attempts. Continuing with existing image..."
+              fi
+              ATTEMPT=$((ATTEMPT + 1))
+            done
+            
+            # Start service
+            echo "Starting college-crawler..."
+            $DOCKER_COMPOSE_CMD up -d college-crawler
+            
+            # Check service status
+            echo "Checking service status..."
+            sleep 5
+            $DOCKER_COMPOSE_CMD ps college-crawler
+            
+            # Show logs
+            echo "Recent logs:"
+            $DOCKER_COMPOSE_CMD logs --tail=20 college-crawler
+            
+            echo "Deployment completed successfully!"

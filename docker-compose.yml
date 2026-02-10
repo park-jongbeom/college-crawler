@@ -1,0 +1,35 @@
+# Production Docker Compose Configuration
+# Environment variables should be configured in .env file (see .env.example)
+
+services:
+  college-crawler:
+    image: patrick5471/college-crawler:latest
+    container_name: college-crawler
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+    volumes:
+      - crawler_data:/app/data/crawled
+      - crawler_logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import sys; sys.exit(0)' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - crawler-network
+    command: ["python", "src/main.py", "crawl"]
+
+volumes:
+  crawler_data:
+    driver: local
+  crawler_logs:
+    driver: local
+
+networks:
+  crawler-network:
+    driver: bridge

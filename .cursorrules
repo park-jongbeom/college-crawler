@@ -1,60 +1,137 @@
-# 🕷️ Master Rules for Web Crawler (Python)
+# 🚀 Master Rules for College Crawler (Python)
 
-당신은 웹 크롤링 전문가이자 데이터 엔지니어입니다. 모든 작업 시 아래 지침을 엄격히 준수하십시오.
+당신은 보안 전문가이자 시니어 백엔드 개발자입니다. 모든 작업 시 아래 지침을 엄격히 준수하십시오.
 
 ## 1. 기본 원칙
 - 모든 응답, 코드 주석, 문서는 반드시 **한국어(Korean)**로 수행합니다.
-- 복잡한 크롤링 로직 구현 전 반드시 **대상 사이트 구조 분석**을 먼저 수행하십시오.
-- 코드를 수정/생성한 후에는 명확한 **커밋 메시지**를 제안하십시오.
+- 복잡한 로직 구현 전 반드시 `docs/00_DEVELOPMENT_POLICY.md`에 의거하여 **Problem 1-Pager**를 작성하십시오.
+- 코드를 수정/생성한 후에는 지정된 **커밋 메시지** 형식을 제안하십시오.
 
-## 2. 크롤링 윤리 및 법적 준수
-크롤링 시 다음 사항을 필수로 체크하십시오:
-"robots.txt 확인, 이용약관 검토, Rate Limiting 적용, User-Agent 명시, 개인정보 제외, 저작권 존중, 서버 부하 최소화, 에러 처리, 로그 기록, 재시도 로직"
+## 2. 보안 및 품질 강제
+코딩 시 다음 보안 항목을 체크리스트로 삼아 로직에 반영하십시오:
+- **데이터 검증**: 입력 데이터 검증, SQL Injection 방어
+- **인증/인가**: DB 접근 시 최소 권한 원칙
+- **Rate Limiting**: 크롤링 시 대상 서버 부하 고려
+- **Robots.txt 준수**: 웹 크롤링 시 반드시 확인
+- **개인정보 보호**: 수집된 연락처 정보 암호화
+- **Secret 관리**: 환경 변수로 비밀 정보 관리 (.env)
+- **Audit Log**: 모든 중요 작업 로그 기록
+- **에러 노출 차단**: 사용자에게 스택 트레이스 노출 금지
+- **의존성 점검**: requirements.txt 버전 고정
 
-## 3. 기술 스택
-- **Language**: Python 3.10+ (타입 힌팅 적극 활용)
-- **크롤링**: BeautifulSoup4, Selenium, Playwright, Scrapy 중 적합한 도구 선택
-- **비동기**: asyncio, aiohttp로 병렬 처리 최적화
-- **데이터**: pandas로 데이터 정규화 및 변환
-- **저장**: SQLAlchemy (PostgreSQL), JSON, CSV
-- **스케줄링**: APScheduler, Celery
+## 3. 기술적 제약 사항
+- **Language**: Python 3.11+, PEP 8 스타일 가이드 준수
+- **Type Hints**: 모든 함수에 타입 힌트 사용
+- **Async**: 대량 크롤링 시 asyncio 활용
+- **Test**: 모든 비즈니스 로직에는 pytest 기반 테스트 코드 포함
 
-## 4. 코드 품질
-- 모든 함수에 타입 힌팅 적용: `def crawl(url: str) -> dict[str, any]:`
-- 예외 처리 필수: 네트워크 에러, HTML 구조 변경 대응
-- 로깅: logging 모듈로 디버깅 가능하도록
-- 테스트: pytest로 단위 테스트 작성
-- 문서화: docstring으로 함수 설명
+## 4. 코딩 스타일
 
-## 5. 프로젝트 구조
+### Python 스타일
+```python
+# 좋은 예
+def parse_contact_info(html: str) -> dict[str, str]:
+    """
+    HTML에서 연락처 정보를 파싱합니다.
+    
+    Args:
+        html: 파싱할 HTML 문자열
+        
+    Returns:
+        연락처 정보를 담은 딕셔너리
+    """
+    result = {}
+    # 로직 구현
+    return result
+
+# 나쁜 예 - 타입 힌트 없음, docstring 없음
+def parse(html):
+    result = {}
+    return result
 ```
-crawler/
-├── crawlers/          # 사이트별 크롤러
-│   ├── base.py       # 공통 베이스 클래스
-│   └── site_*.py     # 각 사이트 크롤러
-├── processors/        # 데이터 처리
-│   ├── normalizer.py # 정규화
-│   └── validator.py  # 검증
-├── models/            # 데이터 모델
-├── utils/             # 유틸리티
-└── main.py            # 진입점
+
+### 에러 처리
+```python
+# 좋은 예
+try:
+    data = crawler.fetch_school_info(url)
+except requests.RequestException as e:
+    logger.error(f"학교 정보 크롤링 실패: {url}, 오류: {e}")
+    return None
+
+# 나쁜 예 - 에러 무시
+try:
+    data = crawler.fetch_school_info(url)
+except:
+    pass
 ```
 
-## 6. 보안 및 안정성
-- 민감 정보는 환경변수(.env)로 관리
-- DB 연결 정보, API 키 하드코딩 금지
-- Proxy 로테이션 지원
-- Captcha 대응 전략
-- IP 차단 시 재시도 로직
+### 로깅
+```python
+# 좋은 예
+logger.info(f"학교 정보 크롤링 시작: {school.name}")
+logger.debug(f"요청 URL: {url}")
+logger.warning(f"응답 시간이 느림: {elapsed}초")
+logger.error(f"파싱 실패: {school.name}, 오류: {e}")
 
-## 7. 성능 최적화
-- 불필요한 요청 최소화 (캐싱 활용)
-- 병렬 처리로 속도 향상
-- 메모리 효율적 처리 (스트리밍, 청크)
-- DB 배치 삽입
+# 나쁜 예 - print 사용
+print("크롤링 시작")
+```
 
-## 8. 컨텍스트 참조
-작업 수행 전 `docs/` 폴더 내의 문서를 참조하십시오:
-- **크롤링 대상**: 사이트 목록, URL 패턴, 선택자
-- **데이터 스키마**: 수집 필드, 정규화 규칙
-- **운영 가이드**: 스케줄, 모니터링, 에러 대응
+## 5. 컨텍스트 참조
+작업 수행 전 반드시 `docs/` 폴더 내의 문서들을 읽고 비즈니스 도메인과 보안 정책을 준수하십시오.
+
+### 필수 참조 문서
+- **개발 정책**: `docs/00_DEVELOPMENT_POLICY.md`
+- **데이터베이스 스키마**: `docs/DATABASE_SCHEMA.md` - 모든 DB 관련 작업 시 반드시 참조
+
+## 6. 프로젝트 특화 규칙
+
+### 웹 크롤링
+- User-Agent 설정 필수
+- 요청 간 최소 2초 대기 (CRAWL_DELAY)
+- Robots.txt 체크
+- 최대 재시도 3회
+- 타임아웃 30초
+
+### 데이터베이스
+- SQLAlchemy ORM 사용
+- 트랜잭션 관리 철저
+- 중복 데이터 체크
+- audit_logs 테이블에 모든 작업 기록
+
+### 파서 구현
+- 각 파서는 독립적인 모듈로 작성
+- 파싱 실패 시 None 반환 (예외 발생 금지)
+- 데이터 검증 로직 포함
+
+## 7. 테스트 작성
+```python
+# 좋은 예
+def test_parse_email():
+    """이메일 파싱 테스트"""
+    html = '<a href="mailto:test@example.com">Contact</a>'
+    result = ContactParser.parse_email(html)
+    assert result == "test@example.com"
+    
+def test_parse_email_not_found():
+    """이메일이 없을 때 테스트"""
+    html = '<div>No email here</div>'
+    result = ContactParser.parse_email(html)
+    assert result is None
+```
+
+## 8. 커밋 메시지 형식
+```
+[타입] 간단한 제목
+
+상세 설명:
+- 변경 사항 1
+- 변경 사항 2
+
+관련 파일:
+- src/crawlers/school_crawler.py
+- src/database/models.py
+```
+
+타입: feat(기능), fix(버그), docs(문서), refactor(리팩토링), test(테스트), chore(기타)

@@ -1,51 +1,43 @@
-# 🕷️ College Crawler
+# College Crawler
 
-미국 대학 정보 수집을 위한 웹 크롤링 프로젝트
+미국 대학 정보 자동 수집 및 이메일 발송 시스템
 
-## 📋 프로젝트 개요
+## 프로젝트 개요
 
-다수의 대학 웹사이트에서 학교 정보, 프로그램, 입학 요건 등을 자동으로 수집하는 크롤러입니다.
+미국 Community College 60개교의 상세 정보를 자동으로 수집하고, 유학사업에 필요한 정보를 관리하는 시스템입니다.
 
-## 🛠️ 기술 스택
+### 주요 기능
 
-- **Python**: 3.10+
-- **크롤링**: BeautifulSoup4, Selenium, Playwright
-- **데이터 처리**: pandas, numpy
-- **데이터베이스**: PostgreSQL (SQLAlchemy)
-- **비동기**: asyncio, aiohttp
+- **학교 정보 크롤링**: 웹사이트에서 자동으로 학교 정보 수집
+- **데이터 관리**: PostgreSQL 데이터베이스에 구조화된 데이터 저장
+- **이메일 자동화**: 학교 담당자에게 자동 이메일 발송 (Phase 3)
+
+### 수집 정보
+
+- 유학생 담당자 연락처 (이메일, 전화)
+- 학교 시설 (기숙사, 식당, 체육관, 엔터테인먼트)
+- 스텝 현황 (교수진, 직원 수)
+- 유학생 지원 방법
+- ESL 프로그램 정보
+- 취업률
+- 학교 환경 및 역사
+
+## 기술 스택
+
+- **언어**: Python 3.11+
+- **데이터베이스**: PostgreSQL 17 (기존 ga-api-platform DB 활용)
+- **웹 크롤링**: BeautifulSoup4, Requests, Selenium, Scrapy
+- **ORM**: SQLAlchemy + Alembic
 - **스케줄링**: APScheduler
+- **템플릿**: Jinja2
 
-## 📁 프로젝트 구조
+## 설치 및 설정
 
-```
-college-crawler/
-├── crawlers/              # 크롤러 모듈
-│   ├── base.py           # 베이스 크롤러
-│   └── schools/          # 학교별 크롤러
-├── processors/            # 데이터 처리
-│   ├── normalizer.py     # 데이터 정규화
-│   └── validator.py      # 데이터 검증
-├── models/                # 데이터 모델
-│   └── school.py
-├── utils/                 # 유틸리티
-│   ├── logger.py
-│   └── db.py
-├── config/                # 설정
-│   └── settings.py
-├── tests/                 # 테스트
-├── docs/                  # 문서
-├── requirements.txt       # 의존성
-└── main.py               # 진입점
-```
-
-## 🚀 시작하기
-
-### 1. 가상환경 생성
+### 1. 가상환경 생성 및 활성화
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate  # Windows
+python -m venv venv
+.\venv\Scripts\activate  # Windows
 ```
 
 ### 2. 의존성 설치
@@ -54,100 +46,156 @@ source .venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-### 3. 환경변수 설정
+### 3. 환경 변수 설정
 
-`.env` 파일 생성:
-
-```env
-# Database
-DB_HOST=ls-584229d62cccd625a5fa723267dbdbc614b3b0e5.c9wi0gwweu9n.ap-northeast-2.rds.amazonaws.com
-DB_PORT=5432
-DB_NAME=ga_db
-DB_USER=dbmasteruser
-DB_PASSWORD=your_password
-
-# Crawler Settings
-USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
-REQUEST_DELAY=2
-MAX_RETRIES=3
-TIMEOUT=30
-```
-
-### 4. 실행
+`.env.example`을 복사하여 `.env` 파일 생성 후 실제 값 입력:
 
 ```bash
-python main.py
+cp .env.example .env
 ```
 
-## 📝 개발 가이드
+### 4. 데이터베이스 마이그레이션
 
-### 새로운 크롤러 추가
+```bash
+# Alembic 초기화 (이미 완료됨)
+# alembic init src/database/migrations
 
-```python
-from crawlers.base import BaseCrawler
-
-class NewSchoolCrawler(BaseCrawler):
-    def __init__(self):
-        super().__init__(base_url="https://example.edu")
-    
-    def parse(self, html: str) -> dict:
-        # 파싱 로직 구현
-        pass
+# 마이그레이션 실행
+alembic upgrade head
 ```
+
+### 5. 초기 데이터 삽입
+
+```bash
+python scripts/init_schools.py
+```
+
+## 사용법
+
+### 학교 정보 크롤링
+
+```bash
+python src/main.py crawl
+```
+
+### 특정 학교만 크롤링
+
+```bash
+python src/main.py crawl --school "Los Angeles Trade-Technical College"
+```
+
+### 데이터베이스 확인
+
+```bash
+python scripts/check_db.py
+```
+
+## 🐳 Docker로 실행하기
+
+Docker를 사용하면 환경 설정 없이 바로 실행할 수 있습니다.
+
+### 로컬 개발 환경 (PostgreSQL 포함)
+
+```bash
+# 환경 시작
+docker compose -f docker-compose-local.yml up -d
+
+# 로그 확인
+docker compose -f docker-compose-local.yml logs -f
+
+# 크롤링 실행
+docker compose -f docker-compose-local.yml exec crawler-local python src/main.py crawl --limit 5
+
+# 환경 종료
+docker compose -f docker-compose-local.yml down
+```
+
+### 프로덕션 배포
+
+```bash
+# 이미지 빌드 및 푸시
+docker build -t patrick5471/college-crawler:latest .
+docker push patrick5471/college-crawler:latest
+
+# 서버에서 실행
+docker compose up -d
+```
+
+**상세 가이드**: [README.Docker.md](README.Docker.md)
+
+## 🔄 CI/CD
+
+GitHub Actions를 통한 자동 배포가 구성되어 있습니다.
+
+`main` 브랜치에 푸시하면:
+1. ✅ Python 의존성 설치 및 테스트
+2. 🐳 Docker 이미지 빌드
+3. 📤 Docker Hub에 푸시
+4. 🚀 서버에 자동 배포
+
+**필요한 GitHub Secrets**:
+- `DOCKER_USERNAME`, `DOCKER_PASSWORD`
+- `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`
+
+## 프로젝트 구조
+
+```
+college-crawler/
+├── src/
+│   ├── collectors/          # 학교 리스트 수집
+│   ├── crawlers/           # 웹 크롤링
+│   │   └── parsers/        # 데이터 파싱
+│   ├── database/           # DB 연동
+│   │   ├── models.py       # SQLAlchemy 모델
+│   │   ├── repository.py   # CRUD 작업
+│   │   └── migrations/     # Alembic 마이그레이션
+│   ├── email/              # 이메일 발송 (Phase 3)
+│   └── utils/              # 유틸리티
+├── scripts/                # 유틸리티 스크립트
+├── data/                   # 데이터 파일
+├── tests/                  # 테스트
+└── docs/                   # 문서
+```
+
+## 개발 가이드
+
+### Cursor 규칙
+
+이 프로젝트는 `.cursorrules` 파일에 정의된 개발 정책을 따릅니다:
+
+- 모든 코드, 주석, 문서는 한국어로 작성
+- 보안 체크리스트 준수
+- 테스트 코드 필수 작성
+- 철저한 로깅 및 에러 처리
 
 ### 테스트 실행
 
 ```bash
 pytest tests/
-pytest tests/ -v  # 상세 출력
-pytest tests/ --cov=crawlers  # 커버리지
 ```
 
-## 🔒 윤리 및 법적 준수
+## 로드맵
 
-- ✅ robots.txt 확인
-- ✅ 이용약관 검토
-- ✅ Rate Limiting 적용
-- ✅ User-Agent 명시
-- ✅ 서버 부하 최소화
+### Phase 1: 프로젝트 기반 구축 (완료)
+- [x] 프로젝트 구조 생성
+- [x] DB 마이그레이션
+- [x] 초기 학교 데이터 삽입
 
-## 📊 데이터베이스 스키마
+### Phase 2: 웹 크롤링 시스템 (진행 중)
+- [ ] Base Crawler 구현
+- [ ] 학교 정보 파서 구현
+- [ ] 크롤링 스케줄러
 
-연결: `ga_db` PostgreSQL 데이터베이스
-- `schools`: 학교 마스터 데이터
-- `programs`: 프로그램 정보
-- `school_documents`: 학교 문서 (RAG)
-- `program_documents`: 프로그램 문서 (RAG)
+### Phase 3: 이메일 시스템 (예정)
+- [ ] 이메일 템플릿
+- [ ] SMTP 발송 시스템
+- [ ] 캠페인 관리
 
-## 🐛 문제 해결
+## 라이선스
 
-### Selenium 드라이버 설치
+Copyright (c) 2026 Go Almond
 
-```bash
-# Chrome
-pip install webdriver-manager
-```
+## 참고 문서
 
-### Playwright 설치
-
-```bash
-playwright install
-```
-
-## 📚 참고 문서
-
-- [BeautifulSoup4 문서](https://www.crummy.com/software/BeautifulSoup/bs4/doc/)
-- [Selenium 문서](https://www.selenium.dev/documentation/)
-- [Playwright 문서](https://playwright.dev/python/)
-
-## 👥 기여
-
-1. Fork the Project
-2. Create your Feature Branch
-3. Commit your Changes
-4. Push to the Branch
-5. Open a Pull Request
-
-## 📄 라이선스
-
-Private Project
+- [개발 정책](docs/00_DEVELOPMENT_POLICY.md)
+- [데이터베이스 스키마](docs/DATABASE_SCHEMA.md)

@@ -1,0 +1,59 @@
+# Local Development Docker Compose Configuration
+# Use this for local testing with PostgreSQL
+
+services:
+  postgres-local:
+    image: postgres:17-alpine
+    container_name: college-crawler-postgres-local
+    environment:
+      - POSTGRES_DB=college_crawler_local
+      - POSTGRES_USER=crawler
+      - POSTGRES_PASSWORD=crawler_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    ports:
+      - "5433:5432"  # Use 5433 to avoid conflict with existing PostgreSQL
+    volumes:
+      - postgres_local_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crawler"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crawler-local-network
+
+  crawler-local:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: college-crawler-local
+    environment:
+      - DATABASE_HOST=postgres-local
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=college_crawler_local
+      - DATABASE_USER=crawler
+      - DATABASE_PASSWORD=crawler_password
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - CRAWL_DELAY=2
+      - MAX_RETRY=3
+      - CRAWL_TIMEOUT=30
+    volumes:
+      - ./data/crawled:/app/data/crawled
+      - ./logs:/app/logs
+      - ./src:/app/src  # Mount source for live reload
+      - ./scripts:/app/scripts  # Mount scripts for database setup
+    depends_on:
+      postgres-local:
+        condition: service_healthy
+    networks:
+      - crawler-local-network
+    command: ["tail", "-f", "/dev/null"]  # Keep container running for development
+
+volumes:
+  postgres_local_data:
+    driver: local
+
+networks:
+  crawler-local-network:
+    driver: bridge
