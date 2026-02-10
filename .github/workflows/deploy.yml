@@ -89,10 +89,10 @@ jobs:
             
             echo "Using: $DOCKER_COMPOSE_CMD"
             
-            # Stop and remove existing container
-            echo "Stopping existing college-crawler container..."
-            $DOCKER_COMPOSE_CMD stop college-crawler || true
-            $DOCKER_COMPOSE_CMD rm -f college-crawler || true
+            # Stop and remove existing containers
+            echo "Stopping existing college-crawler and monitor containers..."
+            $DOCKER_COMPOSE_CMD stop college-crawler monitor || true
+            $DOCKER_COMPOSE_CMD rm -f college-crawler monitor || true
             
             # Pull latest image with retry logic
             echo "Pulling latest image for college-crawler..."
@@ -114,14 +114,22 @@ jobs:
               ATTEMPT=$((ATTEMPT + 1))
             done
             
-            # Start service
-            echo "Starting college-crawler..."
-            $DOCKER_COMPOSE_CMD up -d college-crawler
+            # Start crawler and monitor
+            echo "Starting college-crawler and monitor..."
+            $DOCKER_COMPOSE_CMD up -d college-crawler monitor
+            
+            # Connect monitor to ga-api-platform network (for https://go-almond.ddnsfree.com/monitor/)
+            echo "Connecting college-crawler-monitor to ga-api-platform network..."
+            docker network connect ga-api-platform_ga-network college-crawler-monitor 2>/dev/null || true
+            
+            # Restart ga-nginx so it can resolve college-crawler-monitor (same server)
+            echo "Restarting ga-nginx..."
+            docker restart ga-nginx 2>/dev/null || true
             
             # Check service status
             echo "Checking service status..."
             sleep 5
-            $DOCKER_COMPOSE_CMD ps college-crawler
+            $DOCKER_COMPOSE_CMD ps college-crawler monitor
             
             # Show logs
             echo "Recent logs:"
