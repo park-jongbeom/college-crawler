@@ -137,6 +137,54 @@ GitHub Actions를 통한 자동 배포가 구성되어 있습니다.
 - `DOCKER_USERNAME`, `DOCKER_PASSWORD`
 - `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`
 
+## 📊 운영 모니터링
+
+### 🌐 웹 대시보드 (NEW!)
+
+실시간 모니터링 웹 대시보드를 제공합니다:
+
+```bash
+# 서비스 시작
+docker compose up -d
+
+# 브라우저에서 접속
+http://서버IP:8080
+```
+
+**주요 기능:**
+- ✅ 실시간 상태 모니터링 (컨테이너, DB, 리소스)
+- 📊 크롤링 통계 및 성공률
+- 📝 실시간 로그 확인
+- 🎓 최근 업데이트된 학교 목록
+- 🔄 자동 새로고침 (30초)
+
+**상세 가이드**: [📊 모니터링 대시보드](docs/MONITORING_DASHBOARD.md)
+
+### 🖥️ CLI 모니터링
+
+```bash
+# 종합 모니터링 (한 번에 모든 상태 확인)
+./scripts/monitor.sh
+
+# 헬스체크
+./scripts/health_monitor.sh
+
+# 실시간 로그
+docker compose logs -f college-crawler
+```
+
+### 주요 확인 항목
+
+- **컨테이너 상태**: `docker ps | grep college-crawler`
+- **데이터베이스**: `docker exec college-crawler python scripts/check_db.py`
+- **크롤링 결과**: `docker exec college-crawler ls /app/data/crawled/`
+- **에러 로그**: `docker compose logs college-crawler | grep -i error`
+
+**상세 가이드**:
+- [📊 모니터링 웹 대시보드](docs/MONITORING_DASHBOARD.md) - 웹 기반 실시간 모니터링
+- [⚡ 빠른 모니터링 가이드](docs/QUICK_MONITORING.md) - 3분 안에 전체 상태 확인
+- [🔍 운영 서버 모니터링](docs/PRODUCTION_MONITORING.md) - 상세 모니터링 방법
+
 ## 프로젝트 구조
 
 ```

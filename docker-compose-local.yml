@@ -43,12 +43,38 @@ services:
       - ./logs:/app/logs
       - ./src:/app/src  # Mount source for live reload
       - ./scripts:/app/scripts  # Mount scripts for database setup
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker 소켓 (모니터링용)
     depends_on:
       postgres-local:
         condition: service_healthy
     networks:
       - crawler-local-network
     command: ["tail", "-f", "/dev/null"]  # Keep container running for development
+
+  monitor-local:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crawler-monitor-local
+    environment:
+      - DATABASE_HOST=postgres-local
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=college_crawler_local
+      - DATABASE_USER=crawler
+      - DATABASE_PASSWORD=crawler_password
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src:/app/src  # Mount source for live reload
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker 접근 권한
+    depends_on:
+      - postgres-local
+      - crawler-local
+    networks:
+      - crawler-local-network
+    command: ["python", "src/monitor/run.py"]
 
 volumes:
   postgres_local_data:

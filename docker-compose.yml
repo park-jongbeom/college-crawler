@@ -3,7 +3,8 @@
 
 services:
   college-crawler:
-    image: patrick5471/college-crawler:latest
+    build: .
+    image: college-crawler:local
     container_name: college-crawler
     env_file:
       - .env
@@ -13,6 +14,7 @@ services:
     volumes:
       - crawler_data:/app/data/crawled
       - crawler_logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker 소켓 마운트 (모니터링용)
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import sys; sys.exit(0)' || exit 1"]
       interval: 30s
@@ -23,6 +25,33 @@ services:
     networks:
       - crawler-network
     command: ["python", "src/main.py", "crawl"]
+
+  monitor:
+    build: .
+    image: college-crawler:local
+    container_name: college-crawler-monitor
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - LOG_FILE=/tmp/monitor.log  # 임시 디렉토리에 로그 저장
+    ports:
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker 접근 권한
+    depends_on:
+      - college-crawler
+    restart: unless-stopped
+    networks:
+      - crawler-network
+    command: ["python", "-m", "uvicorn", "src.monitor.api:app", "--host", "0.0.0.0", "--port", "8080"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   crawler_data:

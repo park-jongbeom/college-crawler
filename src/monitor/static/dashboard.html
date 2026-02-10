@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>College Crawler Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .pulse-dot {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen" x-data="dashboard()" x-init="init()">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <span class="text-3xl">🕷️</span>
+                    <h1 class="text-2xl font-bold text-gray-900">College Crawler Monitor</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-500" x-text="lastUpdate"></span>
+                    <button @click="fetchData()" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                        🔄 새로고침
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+        <!-- Loading State -->
+        <div x-show="loading" x-cloak class="text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p class="mt-4 text-gray-600">데이터 로딩 중...</p>
+        </div>
+
+        <!-- Content -->
+        <div x-show="!loading" x-cloak class="space-y-6">
+            <!-- Status Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Container Status -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">컨테이너 상태</p>
+                            <p class="text-2xl font-bold mt-1" 
+                               :class="status.container?.running ? 'text-green-600' : 'text-red-600'"
+                               x-text="status.container?.running ? 'Running' : 'Stopped'">
+                            </p>
+                        </div>
+                        <div class="text-4xl">
+                            <span x-show="status.container?.running">✅</span>
+                            <span x-show="!status.container?.running">❌</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-sm text-gray-500">
+                        <span x-show="status.container?.health" 
+                              x-text="'Health: ' + status.container?.health">
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Database Status -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">데이터베이스</p>
+                            <p class="text-2xl font-bold mt-1 text-blue-600" 
+                               x-text="status.database?.total_schools || 0">
+                            </p>
+                        </div>
+                        <div class="text-4xl">💾</div>
+                    </div>
+                    <div class="mt-4 text-sm text-gray-500">
+                        <span x-text="'이메일: ' + (status.database?.schools_with_email || 0) + '개'"></span>
+                    </div>
+                </div>
+
+                <!-- CPU Usage -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">CPU 사용률</p>
+                            <p class="text-2xl font-bold mt-1 text-purple-600" 
+                               x-text="(status.resources?.cpu_percent || 0).toFixed(1) + '%'">
+                            </p>
+                        </div>
+                        <div class="text-4xl">⚡</div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-purple-600 h-2 rounded-full transition-all" 
+                                 :style="'width: ' + (status.resources?.cpu_percent || 0) + '%'">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memory Usage -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">메모리 사용량</p>
+                            <p class="text-2xl font-bold mt-1 text-orange-600" 
+                               x-text="(status.resources?.memory_usage_mb || 0).toFixed(0) + 'MB'">
+                            </p>
+                        </div>
+                        <div class="text-4xl">🧠</div>
+                    </div>
+                    <div class="mt-4 text-sm text-gray-500">
+                        <span x-text="'/ ' + (status.resources?.memory_limit_mb || 0).toFixed(0) + 'MB'"></span>
+                        <span class="ml-2" x-text="'(' + (status.resources?.memory_percent || 0).toFixed(1) + '%)'"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Crawling Statistics -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-900">📊 크롤링 통계</h2>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <div class="text-center">
+                                <p class="text-4xl font-bold text-green-600" 
+                                   x-text="status.crawling?.success || 0">
+                                </p>
+                                <p class="text-sm text-gray-600 mt-2">성공</p>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-center">
+                                <p class="text-4xl font-bold text-red-600" 
+                                   x-text="status.crawling?.failed || 0">
+                                </p>
+                                <p class="text-sm text-gray-600 mt-2">실패</p>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-center">
+                                <p class="text-4xl font-bold text-blue-600" 
+                                   x-text="(status.crawling?.success_rate || 0).toFixed(1) + '%'">
+                                </p>
+                                <p class="text-sm text-gray-600 mt-2">성공률</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <div class="w-full bg-gray-200 rounded-full h-4">
+                            <div class="bg-gradient-to-r from-green-500 to-blue-500 h-4 rounded-full transition-all" 
+                                 :style="'width: ' + (status.database?.completion_rate || 0) + '%'">
+                            </div>
+                        </div>
+                        <p class="text-center text-sm text-gray-600 mt-2">
+                            전체 완료율: <span class="font-semibold" x-text="(status.database?.completion_rate || 0).toFixed(1) + '%'"></span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Schools -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-900">🎓 최근 업데이트된 학교</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    학교명
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    위치
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    연락처
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    업데이트
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="school in recentSchools" :key="school.id">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="font-medium text-gray-900" x-text="school.name"></div>
+                                        <div class="text-sm text-gray-500" x-text="school.website"></div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <span x-text="school.city + ', ' + school.state"></span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        <div x-show="school.international_email" class="text-blue-600">
+                                            📧 <span x-text="school.international_email"></span>
+                                        </div>
+                                        <div x-show="school.international_phone" class="text-green-600">
+                                            📞 <span x-text="school.international_phone"></span>
+                                        </div>
+                                        <div x-show="!school.international_email && !school.international_phone" class="text-gray-400">
+                                            정보 없음
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <span x-text="formatDate(school.updated_at)"></span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Recent Logs -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h2 class="text-xl font-semibold text-gray-900">📝 최근 로그</h2>
+                    <button @click="fetchLogs()" 
+                            class="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded transition">
+                        새로고침
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div class="bg-gray-900 rounded-lg p-4 max-h-96 overflow-y-auto font-mono text-sm">
+                        <template x-for="log in logs" :key="log.timestamp">
+                            <div class="text-gray-300 py-1 hover:bg-gray-800 px-2 rounded">
+                                <span class="text-gray-500" x-text="log.timestamp"></span>
+                                <span class="ml-2" x-text="log.message"></span>
+                            </div>
+                        </template>
+                        <div x-show="logs.length === 0" class="text-gray-500 text-center py-4">
+                            로그가 없습니다.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-12 pb-8 text-center text-sm text-gray-500">
+        <p>College Crawler Monitor v1.0.0 | 
+           <span x-show="autoRefresh" class="text-green-600">● 자동 새로고침 (30초)</span>
+           <span x-show="!autoRefresh" class="text-gray-400">○ 자동 새로고침 꺼짐</span>
+        </p>
+    </footer>
+
+    <script>
+        function dashboard() {
+            return {
+                status: {},
+                recentSchools: [],
+                logs: [],
+                loading: true,
+                lastUpdate: '로딩 중...',
+                autoRefresh: true,
+                refreshInterval: null,
+
+                async init() {
+                    await this.fetchData();
+                    await this.fetchLogs();
+                    await this.fetchRecentSchools();
+                    
+                    // 자동 새로고침 (30초마다)
+                    this.refreshInterval = setInterval(() => {
+                        if (this.autoRefresh) {
+                            this.fetchData();
+                        }
+                    }, 30000);
+                },
+
+                async fetchData() {
+                    try {
+                        const response = await fetch('/api/status');
+                        this.status = await response.json();
+                        this.lastUpdate = new Date().toLocaleString('ko-KR');
+                        this.loading = false;
+                    } catch (error) {
+                        console.error('데이터 로딩 실패:', error);
+                        this.loading = false;
+                    }
+                },
+
+                async fetchRecentSchools() {
+                    try {
+                        const response = await fetch('/api/schools/recent?limit=10');
+                        this.recentSchools = await response.json();
+                    } catch (error) {
+                        console.error('학교 목록 로딩 실패:', error);
+                    }
+                },
+
+                async fetchLogs() {
+                    try {
+                        const response = await fetch('/api/logs/recent?lines=50');
+                        const data = await response.json();
+                        this.logs = data.logs || [];
+                    } catch (error) {
+                        console.error('로그 로딩 실패:', error);
+                    }
+                },
+
+                formatDate(dateString) {
+                    if (!dateString) return '-';
+                    const date = new Date(dateString);
+                    return date.toLocaleString('ko-KR', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
