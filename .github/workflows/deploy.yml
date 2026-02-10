@@ -86,7 +86,7 @@ jobs:
             
             # Create .env file from GitHub Secrets
             echo "Creating .env file from GitHub Secrets..."
-            cat > .env << EOF
+            cat > .env << 'ENVEOF'
 # Database Configuration
 DATABASE_HOST=${DATABASE_HOST}
 DATABASE_PORT=${DATABASE_PORT}
@@ -118,7 +118,15 @@ LOG_BACKUP_COUNT=5
 APP_NAME=College Crawler
 APP_VERSION=1.0.0
 ENVIRONMENT=production
-EOF
+ENVEOF
+            
+            # Replace placeholders with actual secrets
+            sed -i "s|\${DATABASE_HOST}|${DATABASE_HOST}|g" .env
+            sed -i "s|\${DATABASE_PORT}|${DATABASE_PORT}|g" .env
+            sed -i "s|\${DATABASE_NAME}|${DATABASE_NAME}|g" .env
+            sed -i "s|\${DATABASE_USER}|${DATABASE_USER}|g" .env
+            sed -i "s|\${DATABASE_PASSWORD}|${DATABASE_PASSWORD}|g" .env
+            
             echo ".env file created successfully"
             
             # Determine docker-compose command
