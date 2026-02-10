@@ -284,7 +284,7 @@
 
                 async fetchData() {
                     try {
-                        const response = await fetch('/api/status');
+                        const response = await fetch('./api/status');
                         this.status = await response.json();
                         this.lastUpdate = new Date().toLocaleString('ko-KR');
                         this.loading = false;
@@ -296,7 +296,7 @@
 
                 async fetchRecentSchools() {
                     try {
-                        const response = await fetch('/api/schools/recent?limit=10');
+                        const response = await fetch('./api/schools/recent?limit=10');
                         this.recentSchools = await response.json();
                     } catch (error) {
                         console.error('학교 목록 로딩 실패:', error);
@@ -305,7 +305,7 @@
 
                 async fetchLogs() {
                     try {
-                        const response = await fetch('/api/logs/recent?lines=50');
+                        const response = await fetch('./api/logs/recent?lines=50');
                         const data = await response.json();
                         this.logs = data.logs || [];
                     } catch (error) {
