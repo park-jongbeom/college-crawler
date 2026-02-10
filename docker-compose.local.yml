@@ -1,19 +1,22 @@
-# Production Docker Compose Configuration
-# Environment variables should be configured in .env file (see .env.example)
+# Local Development Docker Compose Configuration
+# Usage: docker-compose -f docker-compose.local.yml up -d
+# This file is for local development with build from source
 
 services:
   college-crawler:
-    image: patrick5471/college-crawler:latest
-    container_name: college-crawler
+    build: .
+    image: college-crawler:local
+    container_name: college-crawler-local
     env_file:
       - .env
     environment:
-      - ENVIRONMENT=production
-      - LOG_LEVEL=INFO
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
     volumes:
       - crawler_data:/app/data/crawled
       - crawler_logs:/app/logs
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker 소켓 마운트 (모니터링용)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./src:/app/src  # Mount source for hot reload
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import sys; sys.exit(0)' || exit 1"]
       interval: 30s
@@ -26,24 +29,26 @@ services:
     command: ["python", "src/main.py", "crawl"]
 
   monitor:
-    image: patrick5471/college-crawler:latest
-    container_name: college-crawler-monitor
+    build: .
+    image: college-crawler:local
+    container_name: college-crawler-monitor-local
     env_file:
       - .env
     environment:
-      - ENVIRONMENT=production
-      - LOG_LEVEL=INFO
-      - LOG_FILE=/tmp/monitor.log  # 임시 디렉토리에 로그 저장
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - LOG_FILE=/tmp/monitor.log
     ports:
       - "8081:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker 접근 권한
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./src:/app/src  # Mount source for hot reload
     depends_on:
       - college-crawler
     restart: unless-stopped
     networks:
       - crawler-network
-    command: ["python", "-m", "uvicorn", "src.monitor.api:app", "--host", "0.0.0.0", "--port", "8080"]
+    command: ["python", "-m", "uvicorn", "src.monitor.api:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/api/health || exit 1"]
       interval: 30s
