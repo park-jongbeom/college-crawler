@@ -5,11 +5,16 @@ College Crawler 메인 실행 파일
 import argparse
 import json
 import sys
+import uuid
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.crawlers.school_crawler import SchoolCrawler
+from src.database.connection import get_db
+from src.database.models import AuditLog, School
+from src.database.repository import SchoolRepository
 from src.utils.failed_sites import failed_site_manager
 from src.utils.logger import setup_logger
 
@@ -31,7 +36,94 @@ def load_schools_list(json_file: Path) -> list:
     return data.get('schools', [])
 
 
-def crawl_single_school(name: str, website: str, output_dir: Path) -> dict:
+def _find_school_record(db, name: str, website: str) -> Optional[School]:
+    """이름/웹사이트로 학교 레코드를 찾습니다."""
+    school = db.query(School).filter(
+        School.name == name,
+        School.website == website,
+    ).first()
+    if school:
+        return school
+
+    return db.query(School).filter(School.name == name).first()
+
+
+def _build_school_payload(
+    name: str,
+    website: str,
+    crawled_data: Dict[str, Any],
+    seed_school: Optional[Dict[str, Any]],
+    existing_school: Optional[School],
+) -> Dict[str, Any]:
+    """DB 저장용 학교 payload를 구성합니다."""
+    payload: Dict[str, Any] = {
+        "name": name,
+        "website": website,
+        "international_email": crawled_data.get("international_email"),
+        "international_phone": crawled_data.get("international_phone"),
+        "esl_program": crawled_data.get("esl_program"),
+        "international_support": crawled_data.get("international_support"),
+        "facilities": crawled_data.get("facilities"),
+    }
+
+    if seed_school:
+        payload.update(
+            {
+                "type": seed_school.get("type"),
+                "state": seed_school.get("state"),
+                "city": seed_school.get("city"),
+                "tuition": seed_school.get("tuition"),
+                "description": seed_school.get("description"),
+            }
+        )
+    elif existing_school:
+        payload["type"] = existing_school.type
+
+    # None 값은 업데이트 시 기존 유효값을 덮어쓰지 않도록 제외
+    return {k: v for k, v in payload.items() if v is not None}
+
+
+def _record_crawl_audit(
+    status: str,
+    name: str,
+    website: str,
+    school_id: Optional[uuid.UUID] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    """크롤링 감사 로그를 기록합니다."""
+    try:
+        with get_db() as db:
+            resolved_school_id = school_id
+            if resolved_school_id is None:
+                school = _find_school_record(db, name, website)
+                resolved_school_id = school.id if school else uuid.uuid4()
+
+            new_value: Dict[str, Any] = {
+                "status": status,
+                "school_name": name,
+                "website": website,
+            }
+            if extra:
+                new_value.update(extra)
+
+            db.add(
+                AuditLog(
+                    table_name="schools",
+                    record_id=resolved_school_id,
+                    action="CRAWL",
+                    new_value=new_value,
+                )
+            )
+    except Exception as e:
+        logger.error(f"AuditLog 기록 실패: {name} - {e}")
+
+
+def crawl_single_school(
+    name: str,
+    website: str,
+    output_dir: Path,
+    seed_school: Optional[Dict[str, Any]] = None,
+) -> dict:
     """
     단일 학교 크롤링
     
@@ -49,6 +141,7 @@ def crawl_single_school(name: str, website: str, output_dir: Path) -> dict:
         "ssl_error_detected": False,
         "ssl_error_message": "",
         "ssl_error_url": "",
+        "school_id": None,
     }
 
     try:
@@ -63,10 +156,75 @@ def crawl_single_school(name: str, website: str, output_dir: Path) -> dict:
                 return result
 
             crawler.save_to_json(output_dir)
+
+            crawled = data.get("crawled_data", {})
+            try:
+                with get_db() as db:
+                    repo = SchoolRepository(db)
+                    existing_school = _find_school_record(db, name, website)
+                    school_payload = _build_school_payload(
+                        name=name,
+                        website=website,
+                        crawled_data=crawled,
+                        seed_school=seed_school,
+                        existing_school=existing_school,
+                    )
+
+                    saved_school: Optional[School] = None
+                    if existing_school:
+                        repo.update(existing_school.id, school_payload)
+                        saved_school = existing_school
+                        logger.info(f"DB 업데이트 완료: {name}")
+                    else:
+                        if not school_payload.get("type"):
+                            logger.warning(
+                                f"DB 저장 건너뜀(필수 필드 type 없음): {name}"
+                            )
+                        else:
+                            saved_school = repo.create(school_payload)
+                            logger.info(f"DB 생성 완료: {name}")
+
+                    if saved_school:
+                        result["school_id"] = str(saved_school.id)
+                        _record_crawl_audit(
+                            status="success",
+                            name=name,
+                            website=website,
+                            school_id=saved_school.id,
+                            extra={
+                                "data_summary": {
+                                    "email": crawled.get("international_email", "N/A"),
+                                    "phone": crawled.get("international_phone", "N/A"),
+                                    "esl": crawled.get("esl_program", {}).get(
+                                        "available", False
+                                    ),
+                                    "majors_count": len(crawled.get("majors", [])),
+                                }
+                            },
+                        )
+                    else:
+                        _record_crawl_audit(
+                            status="success",
+                            name=name,
+                            website=website,
+                            extra={
+                                "data_summary": {
+                                    "email": crawled.get("international_email", "N/A"),
+                                    "phone": crawled.get("international_phone", "N/A"),
+                                    "esl": crawled.get("esl_program", {}).get(
+                                        "available", False
+                                    ),
+                                    "majors_count": len(crawled.get("majors", [])),
+                                },
+                                "note": "DB row 없이 크롤링 성공 로그만 기록",
+                            },
+                        )
+            except Exception as e:
+                logger.error(f"DB 저장 실패: {name} - {e}")
+
             result["success"] = True
             
             # 요약 출력
-            crawled = data.get('crawled_data', {})
             logger.info(f"\n📊 크롤링 결과 요약:")
             logger.info(f"  - 이메일: {crawled.get('international_email', 'N/A')}")
             logger.info(f"  - 전화: {crawled.get('international_phone', 'N/A')}")
@@ -109,13 +267,22 @@ def crawl_all_schools(json_file: Path, output_dir: Path, limit: int = None) -> N
         should_skip, skip_reason = failed_site_manager.should_skip(website)
         if should_skip:
             logger.warning(f"⏭️  건너뜀: {name} - {skip_reason}")
+            _record_crawl_audit(
+                status="failed",
+                name=name,
+                website=website,
+                extra={
+                    "error_type": "skip_failed_site",
+                    "error_message": skip_reason,
+                },
+            )
             fail_count += 1
             continue
         
         logger.info(f"\n[{i}/{len(schools)}] {name}")
         
         try:
-            result = crawl_single_school(name, website, output_dir)
+            result = crawl_single_school(name, website, output_dir, seed_school=school)
             if result.get("ssl_error_detected", False):
                 failed_site_manager.add_ssl_failure(
                     name=name,
@@ -124,13 +291,44 @@ def crawl_all_schools(json_file: Path, output_dir: Path, limit: int = None) -> N
                     note=f"마지막 실패 URL: {result.get('ssl_error_url', website)}",
                 )
                 logger.warning(f"⏭️  SSL 실패 사이트로 기록: {name}")
+                school_id = result.get("school_id")
+                _record_crawl_audit(
+                    status="failed",
+                    name=name,
+                    website=website,
+                    school_id=uuid.UUID(school_id) if school_id else None,
+                    extra={
+                        "error_type": "ssl_verification",
+                        "error_message": result.get("ssl_error_message", ""),
+                    },
+                )
                 fail_count += 1
             elif result.get("success", False):
                 success_count += 1
             else:
+                school_id = result.get("school_id")
+                _record_crawl_audit(
+                    status="failed",
+                    name=name,
+                    website=website,
+                    school_id=uuid.UUID(school_id) if school_id else None,
+                    extra={
+                        "error_type": "crawl_failed",
+                        "error_message": "크롤링 처리 실패",
+                    },
+                )
                 fail_count += 1
         except Exception as e:
             logger.error(f"❌ 실패: {e}")
+            _record_crawl_audit(
+                status="failed",
+                name=name,
+                website=website,
+                extra={
+                    "error_type": "exception",
+                    "error_message": str(e),
+                },
+            )
             fail_count += 1
     
     # 최종 결과
