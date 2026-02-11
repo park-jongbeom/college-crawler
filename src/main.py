@@ -123,9 +123,12 @@ def _record_crawl_audit(
                     action="UPDATE",
                     new_value=new_value,
                     ip_address="crawler-system",
-                    user_id=SYSTEM_ACTOR_ID,
-                    created_by=SYSTEM_ACTOR_ID,
-                    updated_by=SYSTEM_ACTOR_ID,
+                    # 운영 DB에서는 audit_logs.created_by 등이 users FK를 가지는 경우가 있어
+                    # 존재하지 않는 시스템 UUID를 넣으면 FK 위반으로 저장에 실패합니다.
+                    # 따라서 크롤러 시스템 이벤트는 NULL로 기록합니다.
+                    user_id=None,
+                    created_by=None,
+                    updated_by=None,
                 )
             )
     except Exception as e:
