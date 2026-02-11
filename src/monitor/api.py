@@ -14,6 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
+import base64
+import decimal
 from sqlalchemy import and_, func, or_
 
 # 프로젝트 루트를 Python 경로에 추가
@@ -57,6 +59,34 @@ def _extract_crawl_status(new_value: Optional[Dict[str, Any]]) -> tuple[str, str
         return "failed", str(message) or "크롤링 실패"
 
     return "unknown", str(message) or "상태 해석 불가"
+
+
+def _json_safe(value: Any) -> Any:
+    """
+    운영 데이터가 예상과 다를 때(JSON 직렬화 불가 타입 포함) 상세 API가 500으로 깨지는 것을 방지합니다.
+    - Decimal/UUID/datetime/bytes 등은 안전한 기본 타입으로 변환
+    """
+    if value is None:
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, (datetime,)):
+        return value.isoformat()
+    if isinstance(value, decimal.Decimal):
+        try:
+            return float(value)
+        except Exception:
+            return str(value)
+    if isinstance(value, (bytes, bytearray)):
+        # 바이너리가 섞여 들어온 경우 base64로 전달
+        return base64.b64encode(bytes(value)).decode("ascii")
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+    return str(value)
 
 
 def _failed_sites_by_website() -> Dict[str, Dict[str, Any]]:
@@ -701,7 +731,7 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                     "timestamp": log.created_at.isoformat() if log.created_at else None,
                     "status": _extract_crawl_status(log.new_value)[0],
                     "message": _extract_crawl_status(log.new_value)[1],
-                    "raw": log.new_value if isinstance(log.new_value, dict) else {},
+                    "raw": _json_safe(log.new_value) if isinstance(log.new_value, dict) else {},
                 }
                 for log in crawl_logs
             ]
@@ -732,7 +762,7 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                         "status": "failed",
                         "message": failed_site.get("error_message")
                         or "SSL 검증 실패",
-                        "raw": failed_site,
+                        "raw": _json_safe(failed_site),
                     },
                 )
             if not crawl_history:
@@ -760,10 +790,10 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                     "international_email": school.international_email,
                     "international_phone": school.international_phone,
                     "employment_rate": float(school.employment_rate) if school.employment_rate is not None else None,
-                    "esl_program": school.esl_program,
-                    "international_support": school.international_support,
-                    "facilities": school.facilities,
-                    "staff_info": school.staff_info,
+                    "esl_program": _json_safe(school.esl_program),
+                    "international_support": _json_safe(school.international_support),
+                    "facilities": _json_safe(school.facilities),
+                    "staff_info": _json_safe(school.staff_info),
                     "tuition": school.tuition,
                     "living_cost": school.living_cost,
                     "acceptance_rate": school.acceptance_rate,
@@ -782,7 +812,7 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"학교 상세 조회 실패: {school_id} - {e}")
+        logger.exception(f"학교 상세 조회 실패: {school_id} - {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
