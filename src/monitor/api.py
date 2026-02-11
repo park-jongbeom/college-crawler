@@ -404,6 +404,15 @@ async def get_crawling_stats() -> Dict[str, Any]:
                 attempted = len(latest_logs)
 
                 for _school_id, new_value in latest_logs:
+                    # SSL 검증 오류 목록(failed_sites.json)에 포함된 website는 '실패'보다 '자동 건너뜀' 성격이므로
+                    # 통계에서는 skipped로 재분류합니다.
+                    website = ""
+                    if isinstance(new_value, dict):
+                        website = str(new_value.get("website") or "")
+                    if website and website in ssl_websites:
+                        skipped += 1
+                        continue
+
                     status, _message = _extract_crawl_status(new_value)
                     if status == "success":
                         success += 1
