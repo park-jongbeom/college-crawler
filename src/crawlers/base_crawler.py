@@ -90,7 +90,13 @@ class BaseCrawler:
             logger.warning(f"robots.txt 확인 실패 (허용으로 간주): {e}")
             return True
     
-    def fetch(self, url: str, retry: int = 0, max_retry: Optional[int] = None) -> Optional[requests.Response]:
+    def fetch(
+        self,
+        url: str,
+        retry: int = 0,
+        max_retry: Optional[int] = None,
+        timeout_seconds: Optional[int] = None,
+    ) -> Optional[requests.Response]:
         """
         URL에서 HTML 가져오기
         
@@ -98,11 +104,13 @@ class BaseCrawler:
             url: 요청할 URL
             retry: 현재 재시도 횟수
             max_retry: URL별 최대 재시도 횟수 오버라이드 (None이면 config.MAX_RETRY 사용)
+            timeout_seconds: URL별 타임아웃 오버라이드 (None이면 config.CRAWL_TIMEOUT 사용)
             
         Returns:
             Response 객체 또는 None
         """
         effective_max_retry = config.MAX_RETRY if max_retry is None else int(max_retry)
+        effective_timeout = config.CRAWL_TIMEOUT if timeout_seconds is None else int(timeout_seconds)
 
         # Robots.txt 확인
         if not self.can_fetch(url):
@@ -113,7 +121,7 @@ class BaseCrawler:
             logger.info(f"요청: {url}")
             response = self.session.get(
                 url,
-                timeout=config.CRAWL_TIMEOUT
+                timeout=effective_timeout
             )
             response.raise_for_status()
             
@@ -125,12 +133,23 @@ class BaseCrawler:
             
         except requests.exceptions.Timeout:
             logger.error(f"타임아웃: {url}")
-            return self._retry_fetch(url, retry, max_retry=effective_max_retry)
+            return self._retry_fetch(
+                url,
+                retry,
+                max_retry=effective_max_retry,
+                timeout_seconds=effective_timeout,
+            )
             
         except requests.exceptions.HTTPError as e:
             logger.error(f"HTTP 오류: {url} - {e}")
             if e.response.status_code in [429, 503]:  # Rate limit or Service unavailable
-                return self._retry_fetch(url, retry, max_retry=effective_max_retry, delay=10)
+                return self._retry_fetch(
+                    url,
+                    retry,
+                    max_retry=effective_max_retry,
+                    timeout_seconds=effective_timeout,
+                    delay=10,
+                )
             return None
 
         except requests.exceptions.SSLError as e:
@@ -144,9 +163,21 @@ class BaseCrawler:
             
         except requests.exceptions.RequestException as e:
             logger.error(f"요청 실패: {url} - {e}")
-            return self._retry_fetch(url, retry, max_retry=effective_max_retry)
+            return self._retry_fetch(
+                url,
+                retry,
+                max_retry=effective_max_retry,
+                timeout_seconds=effective_timeout,
+            )
     
-    def _retry_fetch(self, url: str, retry: int, max_retry: int, delay: int = 5) -> Optional[requests.Response]:
+    def _retry_fetch(
+        self,
+        url: str,
+        retry: int,
+        max_retry: int,
+        timeout_seconds: int,
+        delay: int = 5,
+    ) -> Optional[requests.Response]:
         """
         재시도 로직
         
@@ -162,7 +193,12 @@ class BaseCrawler:
         if retry < max_retry:
             logger.info(f"재시도 {retry + 1}/{max_retry}: {url}")
             time.sleep(delay)
-            return self.fetch(url, retry + 1, max_retry=max_retry)
+            return self.fetch(
+                url,
+                retry + 1,
+                max_retry=max_retry,
+                timeout_seconds=timeout_seconds,
+            )
         else:
             logger.error(f"최대 재시도 횟수 초과: {url}")
             return None

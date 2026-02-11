@@ -69,8 +69,8 @@ class SchoolCrawler(BaseCrawler):
         """메인 페이지 크롤링"""
         logger.info(f"메인 페이지 크롤링: {self.base_url}")
         
-        # 홈페이지는 핵심 진입점이므로 기본 재시도 정책을 사용합니다.
-        response = self.fetch(self.base_url)
+        # 홈페이지가 느린 사이트 때문에 전체 런이 장시간 지연되지 않도록 타임아웃/재시도를 완화합니다.
+        response = self.fetch(self.base_url, max_retry=1, timeout_seconds=15)
         if self.ssl_error_detected:
             logger.warning("SSL 검증 오류로 현재 학교 크롤링을 중단합니다.")
             return
@@ -106,7 +106,7 @@ class SchoolCrawler(BaseCrawler):
             logger.info(f"International 페이지 시도: {url}")
             
             # 패턴 탐색은 best-effort: 느린 사이트 때문에 전체 크롤링이 지연되지 않도록 재시도 없이 진행합니다.
-            response = self.fetch(url, max_retry=0)
+            response = self.fetch(url, max_retry=0, timeout_seconds=10)
             if self.ssl_error_detected:
                 logger.warning("SSL 검증 오류로 International 페이지 탐색을 중단합니다.")
                 break
@@ -149,7 +149,7 @@ class SchoolCrawler(BaseCrawler):
             logger.info(f"Programs 페이지 시도: {url}")
             
             # 패턴 탐색은 best-effort
-            response = self.fetch(url, max_retry=0)
+            response = self.fetch(url, max_retry=0, timeout_seconds=10)
             if self.ssl_error_detected:
                 logger.warning("SSL 검증 오류로 Programs 페이지 탐색을 중단합니다.")
                 break
@@ -189,7 +189,7 @@ class SchoolCrawler(BaseCrawler):
             logger.info(f"Campus Life 페이지 시도: {url}")
             
             # 패턴 탐색은 best-effort
-            response = self.fetch(url, max_retry=0)
+            response = self.fetch(url, max_retry=0, timeout_seconds=10)
             if self.ssl_error_detected:
                 logger.warning("SSL 검증 오류로 Campus Life 페이지 탐색을 중단합니다.")
                 break
