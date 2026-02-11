@@ -23,7 +23,17 @@ services:
     restart: unless-stopped
     networks:
       - crawler-network
-    command: ["python", "src/main.py", "crawl"]
+    # 주기적 크롤링: 매일 새벽 2시에 자동 실행
+    command: 
+      - bash
+      - -c
+      - |
+        # Install cron for Debian-based image
+        apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
+        # Setup cron job: daily at 2 AM
+        echo "0 2 * * * cd /app && python src/main.py crawl >> /app/logs/cron.log 2>&1" | crontab -
+        # Start cron in foreground
+        cron && tail -f /dev/null
 
   monitor:
     image: patrick5471/college-crawler:latest

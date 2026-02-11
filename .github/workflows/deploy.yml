@@ -162,12 +162,24 @@ jobs:
             echo "Starting college-crawler and monitor..."
             $DOCKER_COMPOSE_CMD up -d college-crawler monitor
             
+            # Wait for containers to be fully up
+            echo "Waiting for containers to start..."
+            sleep 5
+            
             # Connect monitor to ga-api-platform network (for https://go-almond.ddnsfree.com/monitor/)
             echo "Connecting college-crawler-monitor to ga-api-platform network..."
-            docker network connect ga-api-platform_ga-network college-crawler-monitor 2>/dev/null || true
+            if docker network connect ga-api-platform_ga-network college-crawler-monitor 2>&1; then
+              echo "✓ Monitor connected to ga-api-platform network"
+            else
+              echo "⚠ Monitor already connected or connection failed (continuing...)"
+            fi
+            
+            # Verify network connection
+            echo "Verifying network connectivity..."
+            docker inspect college-crawler-monitor --format '{{range $net, $conf := .NetworkSettings.Networks}}{{printf "%s " $net}}{{end}}' | grep -q "ga-api-platform_ga-network" && echo "✓ Monitor is on ga-api-platform network" || echo "✗ Monitor NOT on ga-api-platform network"
             
             # Restart ga-nginx so it can resolve college-crawler-monitor (same server)
-            echo "Restarting ga-nginx..."
+            echo "Restarting ga-nginx to refresh upstream connections..."
             docker restart ga-nginx 2>/dev/null || true
             
             # Check service status
