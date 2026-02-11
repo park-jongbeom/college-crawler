@@ -316,6 +316,12 @@ async def get_crawling_stats() -> Dict[str, Any]:
     """
     try:
         with get_db() as db:
+            ssl_failures = failed_site_manager.get_failed_sites("ssl_verification_failed")
+            ssl_websites = {
+                str(item.get("website"))
+                for item in ssl_failures
+                if item.get("website") and bool(item.get("skip", True))
+            }
             total_schools = db.query(School).count()
             if _school_crawl_columns_available(db):
                 # 하이브리드 설계: schools.last_crawl_* 컬럼을 통계의 1차 소스로 사용
@@ -325,16 +331,38 @@ async def get_crawling_stats() -> Dict[str, Any]:
                     .filter(School.last_crawl_status == "success")
                     .count()
                 )
-                failed = (
+                failed_total = (
                     db.query(School)
                     .filter(School.last_crawl_status == "failed")
                     .count()
                 )
-                skipped = (
+                skipped_total = (
                     db.query(School)
                     .filter(School.last_crawl_status == "skipped")
                     .count()
                 )
+
+                # SSL 검증 오류는 다음 크롤링에서 자동 스킵되므로, 통계/배지에서도 "건너뜀"으로 분류합니다.
+                failed_ssl_overlap = 0
+                ssl_school_count = 0
+                if ssl_websites:
+                    ssl_list = list(ssl_websites)
+                    ssl_school_count = (
+                        db.query(School.id)
+                        .filter(School.website.in_(ssl_list))
+                        .count()
+                    )
+                    failed_ssl_overlap = (
+                        db.query(School.id)
+                        .filter(School.last_crawl_status == "failed")
+                        .filter(School.website.in_(ssl_list))
+                        .count()
+                    )
+
+                ssl_only_count = max(len(ssl_websites) - ssl_school_count, 0)
+                failed = max(failed_total - failed_ssl_overlap, 0)
+                skipped = skipped_total + failed_ssl_overlap + ssl_only_count
+                attempted = attempted + ssl_only_count
 
                 yesterday = datetime.now() - timedelta(days=1)
                 recently_updated = (
@@ -671,8 +699,9 @@ def _build_recent_school_item(
         crawl_message = school.last_crawl_message or ""
         crawl_updated_at = school.last_crawled_at.isoformat() if school.last_crawled_at else None
     if failed_site:
-        crawl_status = "failed"
-        crawl_message = str(failed_site.get("error_message") or "SSL 검증 실패")
+        # SSL 검증 오류는 다음 크롤링에서 자동으로 건너뜀 처리되므로, UI에서도 skipped로 노출합니다.
+        crawl_status = "skipped"
+        crawl_message = str(failed_site.get("error_message") or "SSL 검증 실패(자동 건너뜀)")
         crawl_updated_at = str(
             failed_site.get("last_checked_at") or failed_site.get("first_failed_at")
         )
