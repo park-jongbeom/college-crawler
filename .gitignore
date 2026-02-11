@@ -93,6 +93,10 @@ Thumbs.db
 # Documentation - 보고서 외 모든 문서 제외
 docs/*
 !docs/AI_ENHANCEMENT_PLAN_2026.md
+!docs/00_DEVELOPMENT_POLICY.md
+!docs/PRODUCTION_DEPLOYMENT.md
+!docs/DEPLOY_VERIFICATION_2026-02-11.md
+!docs/PROBLEM_1_PAGER_LEVEL1_COLLEGE_SCORECARD.md
 
 # Cursor
 .cursor/projects/**/agent-transcripts/

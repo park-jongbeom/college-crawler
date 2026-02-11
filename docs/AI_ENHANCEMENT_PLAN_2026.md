@@ -89,7 +89,8 @@ flowchart TD
 **구현 방식**:
 - 기존 `SchoolCrawler` 확장
 - 새 파서 모듈: `StatisticsParser` (TDD 방식 개발)
-- College Scorecard API 연동 모듈 구축
+- College Scorecard API 연동 모듈 구축 (`COLLEGE_SCORECARD_API` 환경변수로 키 주입)
+- 운영 배포(GitHub Actions)에서 `COLLEGE_SCORECARD_API` Secret → 서버 `.env`로 전달
 
 **예상 효과**:
 - `embedding_text` 품질 50% 향상 (현재 평균 150자 → 300자)

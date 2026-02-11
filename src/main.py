@@ -19,12 +19,14 @@ from src.crawlers.school_crawler import SchoolCrawler
 from src.database.connection import get_db
 from src.database.models import AuditLog, School
 from src.database.repository import SchoolRepository
+from src.services.scorecard_enrichment_service import ScorecardEnrichmentService
 from src.utils.failed_sites import failed_site_manager
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 _AUDIT_USER_ID_CACHE: Optional[uuid.UUID] = None
+_SCORECARD_SERVICE = ScorecardEnrichmentService()
 
 
 def load_schools_list(json_file: Path) -> list:
@@ -232,6 +234,22 @@ def crawl_single_school(
                 with get_db() as db:
                     repo = SchoolRepository(db)
                     existing_school = _find_school_record(db, name, website)
+
+                    # Level 1 메타데이터 보강: College Scorecard API (실패해도 크롤링은 계속)
+                    state_hint = None
+                    city_hint = None
+                    if seed_school:
+                        state_hint = seed_school.get("state") or None
+                        city_hint = seed_school.get("city") or None
+                    if existing_school:
+                        state_hint = state_hint or getattr(existing_school, "state", None)
+                        city_hint = city_hint or getattr(existing_school, "city", None)
+
+                    scorecard_update, scorecard_audit = _SCORECARD_SERVICE.enrich_school(
+                        school_name=name,
+                        state=state_hint,
+                        city=city_hint,
+                    )
                     school_payload = _build_school_payload(
                         name=name,
                         website=website,
@@ -239,6 +257,8 @@ def crawl_single_school(
                         seed_school=seed_school,
                         existing_school=existing_school,
                     )
+                    # None 덮어쓰기 방지: scorecard_update는 값이 있는 필드만 포함합니다.
+                    school_payload.update(scorecard_update)
 
                     saved_school: Optional[School] = None
                     data_changed = False
@@ -283,7 +303,8 @@ def crawl_single_school(
                                         "available", False
                                     ),
                                     "majors_count": len(crawled.get("majors", [])),
-                                }
+                                },
+                                "enrichment": scorecard_audit,
                             },
                         )
                     else:
@@ -300,6 +321,7 @@ def crawl_single_school(
                                     ),
                                     "majors_count": len(crawled.get("majors", [])),
                                 },
+                                "enrichment": scorecard_audit,
                                 "note": "DB row 없이 크롤링 성공 로그만 기록",
                             },
                         )
