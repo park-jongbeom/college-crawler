@@ -271,18 +271,28 @@ class TestSchoolsEndpoint:
         mock_db = MagicMock()
         mock_get_db.return_value.__enter__.return_value = mock_db
         
-        # Query Mock
-        mock_query = MagicMock()
-        mock_query.order_by.return_value.limit.return_value.all.return_value = [mock_school]
-        mock_db.query.return_value = mock_query
-        
-        response = client.get("/api/schools/recent?limit=10")
+        # Query Mock (페이징/필터: filter→order_by→offset→limit→all, count)
+        mock_base = MagicMock()
+        mock_base.filter.return_value = mock_base
+        mock_base.order_by.return_value = mock_base
+        mock_base.offset.return_value = mock_base
+        mock_base.limit.return_value.all.return_value = [mock_school]
+        mock_base.count.return_value = 1
+        mock_db.query.return_value = mock_base
+
+        response = client.get("/api/schools/recent?page=1&per_page=20")
         assert response.status_code == 200
-        
+
         data = response.json()
-        assert isinstance(data, list)
-        if len(data) > 0:
-            school = data[0]
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "total" in data
+        assert "page" in data
+        assert "per_page" in data
+        assert "total_pages" in data
+        assert isinstance(data["items"], list)
+        if len(data["items"]) > 0:
+            school = data["items"][0]
             assert "id" in school
             assert "name" in school
             assert "state" in school

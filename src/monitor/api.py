@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Optional
 import json
 import uuid
 import docker
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -376,22 +376,46 @@ async def get_recent_logs(lines: int = 50) -> Dict[str, Any]:
 
 
 @app.get("/api/schools/recent")
-async def get_recent_schools(limit: int = 10) -> List[Dict[str, Any]]:
+async def get_recent_schools(
+    page: int = Query(1, ge=1, description="페이지 번호 (1-based)"),
+    per_page: int = Query(20, description="페이지당 개수"),
+    state: Optional[str] = Query(None, description="주 필터 (예: CA, TX)"),
+    school_type: Optional[str] = Query(None, description="학교 타입 (예: community_college)"),
+    q: Optional[str] = Query(None, description="학교 이름 검색 (부분 일치)"),
+) -> Dict[str, Any]:
     """
-    최근 업데이트된 학교 목록
-    
-    Args:
-        limit: 조회할 학교 수 (기본: 10)
-        
+    최근 업데이트된 학교 목록 (페이징 및 필터 지원)
+
     Returns:
-        학교 목록
+        items: 현재 페이지 학교 목록
+        total: 필터 적용 후 전체 개수
+        page, per_page, total_pages
     """
+    if per_page not in (10, 20):
+        per_page = 20
+
     try:
         with get_db() as db:
             failed_sites_map = _failed_sites_by_website()
-            schools = db.query(School).order_by(
-                School.updated_at.desc()
-            ).limit(limit).all()
+
+            base = db.query(School)
+            if state and state.strip():
+                base = base.filter(School.state == state.strip())
+            if school_type and school_type.strip():
+                base = base.filter(School.type == school_type.strip())
+            if q and q.strip():
+                base = base.filter(School.name.ilike(f"%{q.strip()}%"))
+
+            total = base.count()
+            total_pages = (total + per_page - 1) // per_page if total > 0 else 0
+            offset = (page - 1) * per_page
+
+            schools = (
+                base.order_by(School.updated_at.desc())
+                .offset(offset)
+                .limit(per_page)
+                .all()
+            )
             school_ids = [school.id for school in schools]
             latest_logs_by_school: Dict[uuid.UUID, AuditLog] = {}
             if school_ids:
@@ -408,7 +432,7 @@ async def get_recent_schools(limit: int = 10) -> List[Dict[str, Any]]:
                     if log.record_id not in latest_logs_by_school:
                         latest_logs_by_school[log.record_id] = log
 
-            return [
+            items = [
                 _build_recent_school_item(
                     school,
                     latest_logs_by_school.get(school.id),
@@ -416,6 +440,14 @@ async def get_recent_schools(limit: int = 10) -> List[Dict[str, Any]]:
                 )
                 for school in schools
             ]
+
+            return {
+                "items": items,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+            }
 
     except Exception as e:
         logger.error(f"학교 목록 조회 실패: {e}")

@@ -115,14 +115,19 @@ class TestLiveServer:
         assert isinstance(data["logs"], list)
     
     def test_schools_endpoint_with_limit(self, base_url, wait_for_server):
-        """학교 엔드포인트 limit 파라미터 테스트"""
-        response = requests.get(f"{base_url}/api/schools/recent?limit=5")
+        """학교 엔드포인트 페이징 파라미터 테스트"""
+        response = requests.get(f"{base_url}/api/schools/recent?page=1&per_page=5")
         assert response.status_code == 200
-        
+
         data = response.json()
-        assert isinstance(data, list)
-        # limit이 5이므로 5개 이하여야 함
-        assert len(data) <= 5
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "total" in data
+        assert "page" in data
+        assert "per_page" in data
+        assert "total_pages" in data
+        assert data["per_page"] == 5
+        assert len(data["items"]) <= 5
 
 
 @pytest.mark.integration

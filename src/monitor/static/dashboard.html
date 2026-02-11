@@ -177,8 +177,33 @@
 
             <!-- Recent Schools -->
             <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
                     <h2 class="text-xl font-semibold text-gray-900">🎓 최근 업데이트된 학교</h2>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <label class="text-sm text-gray-600">주</label>
+                        <select x-model="recentSchoolsState" @change="recentSchoolsPage=1; fetchRecentSchools(1)"
+                                class="rounded border border-gray-300 px-2 py-1.5 text-sm">
+                            <option value="">전체</option>
+                            <option value="CA">캘리포니아 (CA)</option>
+                            <option value="TX">텍사스 (TX)</option>
+                        </select>
+                        <label class="text-sm text-gray-600 ml-2">학교 타입</label>
+                        <select x-model="recentSchoolsType" @change="recentSchoolsPage=1; fetchRecentSchools(1)"
+                                class="rounded border border-gray-300 px-2 py-1.5 text-sm">
+                            <option value="">전체</option>
+                            <option value="community_college">Community College</option>
+                        </select>
+                        <label class="text-sm text-gray-600 ml-2">이름 검색</label>
+                        <input type="text" x-model="recentSchoolsQuery" placeholder="학교 이름 검색"
+                               @input="debounceSearch()"
+                               class="rounded border border-gray-300 px-2 py-1.5 text-sm w-40">
+                        <label class="text-sm text-gray-600 ml-2">페이지당</label>
+                        <select x-model="recentSchoolsPerPage" @change="recentSchoolsPage=1; fetchRecentSchools(1)"
+                                class="rounded border border-gray-300 px-2 py-1.5 text-sm">
+                            <option value="10">10개</option>
+                            <option value="20">20개</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -249,6 +274,34 @@
                             </template>
                         </tbody>
                     </table>
+                </div>
+                <div class="px-6 py-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 bg-gray-50">
+                    <p class="text-sm text-gray-600">
+                        총 <span class="font-semibold" x-text="recentSchoolsTotal"></span>개 중
+                        <span x-show="recentSchoolsTotal > 0" x-text="(recentSchoolsPage - 1) * recentSchoolsPerPage + 1"></span>
+                        <span x-show="recentSchoolsTotal === 0">0</span>
+                        –
+                        <span x-text="Math.min(recentSchoolsPage * recentSchoolsPerPage, recentSchoolsTotal)"></span> 표시
+                    </p>
+                    <div class="flex items-center gap-1">
+                        <button @click="fetchRecentSchools(recentSchoolsPage - 1)"
+                                :disabled="recentSchoolsPage <= 1"
+                                class="px-3 py-1 rounded border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200">
+                            이전
+                        </button>
+                        <template x-for="n in recentSchoolsPageNumbers" :key="n">
+                            <button @click="fetchRecentSchools(n)"
+                                    :class="n === recentSchoolsPage ? 'bg-blue-600 text-white' : 'hover:bg-gray-200'"
+                                    class="w-8 h-8 rounded text-sm">
+                                <span x-text="n"></span>
+                            </button>
+                        </template>
+                        <button @click="fetchRecentSchools(recentSchoolsPage + 1)"
+                                :disabled="recentSchoolsPage >= recentSchoolsTotalPages"
+                                class="px-3 py-1 rounded border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200">
+                            다음
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -504,6 +557,15 @@
             return {
                 status: {},
                 recentSchools: [],
+                recentSchoolsPage: 1,
+                recentSchoolsTotal: 0,
+                recentSchoolsTotalPages: 0,
+                recentSchoolsPageNumbers: [],
+                recentSchoolsPerPage: 20,
+                recentSchoolsState: '',
+                recentSchoolsType: '',
+                recentSchoolsQuery: '',
+                recentSchoolsSearchTimer: null,
                 failedSites: [],
                 logs: [],
                 loading: true,
@@ -524,7 +586,7 @@
                 async init() {
                     await this.fetchData();
                     await this.fetchLogs();
-                    await this.fetchRecentSchools();
+                    await this.fetchRecentSchools(1);
                     await this.fetchFailedSites();
                     
                     // 자동 새로고침 (30초마다)
@@ -533,9 +595,17 @@
                             this.fetchData();
                             this.fetchFailedSites();
                             this.fetchLogs();
-                            this.fetchRecentSchools();
+                            this.fetchRecentSchools(this.recentSchoolsPage);
                         }
                     }, 30000);
+                },
+
+                debounceSearch() {
+                    if (this.recentSchoolsSearchTimer) clearTimeout(this.recentSchoolsSearchTimer);
+                    this.recentSchoolsSearchTimer = setTimeout(() => {
+                        this.recentSchoolsPage = 1;
+                        this.fetchRecentSchools(1);
+                    }, 300);
                 },
 
                 async fetchData() {
@@ -550,10 +620,22 @@
                     }
                 },
 
-                async fetchRecentSchools() {
+                async fetchRecentSchools(page) {
+                    const p = page ?? this.recentSchoolsPage;
                     try {
-                        const response = await fetch('./api/schools/recent?limit=10');
-                        this.recentSchools = await response.json();
+                        const params = new URLSearchParams();
+                        params.set('page', String(p));
+                        params.set('per_page', String(this.recentSchoolsPerPage));
+                        if (this.recentSchoolsState) params.set('state', this.recentSchoolsState);
+                        if (this.recentSchoolsType) params.set('school_type', this.recentSchoolsType);
+                        if (this.recentSchoolsQuery && this.recentSchoolsQuery.trim()) params.set('q', this.recentSchoolsQuery.trim());
+                        const response = await fetch('./api/schools/recent?' + params.toString());
+                        const data = await response.json();
+                        this.recentSchools = data.items || [];
+                        this.recentSchoolsTotal = data.total ?? 0;
+                        this.recentSchoolsPage = data.page ?? 1;
+                        this.recentSchoolsTotalPages = data.total_pages ?? 0;
+                        this.recentSchoolsPageNumbers = Array.from({ length: this.recentSchoolsTotalPages }, (_, i) => i + 1);
                     } catch (error) {
                         console.error('학교 목록 로딩 실패:', error);
                     }

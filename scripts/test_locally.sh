@@ -76,7 +76,7 @@ test_endpoint "Crawling Stats" "/api/crawling/stats"
 test_endpoint "Recent Logs" "/api/logs/recent"
 test_endpoint "Recent Schools" "/api/schools/recent"
 test_endpoint "Recent Logs (20)" "/api/logs/recent?lines=20"
-test_endpoint "Recent Schools (5)" "/api/schools/recent?limit=5"
+test_endpoint "Recent Schools (page=1, per_page=5)" "/api/schools/recent?page=1&per_page=5"
 
 # 대시보드 페이지
 test_endpoint "Dashboard Page" "/"

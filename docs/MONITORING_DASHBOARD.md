@@ -158,7 +158,7 @@ Santa Monica College             CA, SM        📞 (310) 434-4000      2월 10 
 | `/api/crawling/stats` | GET | 크롤링 통계 |
 | `/api/resources` | GET | 리소스 사용량 (CPU, 메모리) |
 | `/api/logs/recent` | GET | 최근 로그 |
-| `/api/schools/recent` | GET | 최근 업데이트된 학교 |
+| `/api/schools/recent` | GET | 최근 업데이트된 학교 (페이징: page, per_page / 필터: state, school_type, q) |
 | `/api/health` | GET | 헬스체크 |
 
 ### API 사용 예시
@@ -173,8 +173,9 @@ curl http://localhost:8080/api/crawling/stats
 # 최근 로그 (100줄)
 curl http://localhost:8080/api/logs/recent?lines=100
 
-# 최근 학교 (20개)
-curl http://localhost:8080/api/schools/recent?limit=20
+# 최근 학교 (페이징·필터)
+curl "http://localhost:8080/api/schools/recent?page=1&per_page=20"
+curl "http://localhost:8080/api/schools/recent?page=1&per_page=10&state=CA&school_type=community_college&q=College"
 ```
 
 ### 응답 예시
