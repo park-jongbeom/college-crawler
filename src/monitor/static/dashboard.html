@@ -166,6 +166,11 @@
                         <p class="text-center text-sm text-gray-600 mt-2">
                             전체 완료율: <span class="font-semibold" x-text="(status.database?.completion_rate || 0).toFixed(1) + '%'"></span>
                         </p>
+                        <p class="text-center text-xs text-gray-500 mt-2">
+                            최근 업데이트 학교: <span class="font-semibold" x-text="status.crawling?.recently_updated || 0"></span>개
+                            <span class="mx-2">|</span>
+                            마지막 크롤링: <span x-text="formatDate(status.crawling?.last_crawl)"></span>
+                        </p>
                     </div>
                 </div>
             </div>
@@ -278,13 +283,14 @@
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             <template x-for="site in failedSites" :key="site.website">
-                                <tr class="hover:bg-gray-50">
+                                <tr class="hover:bg-gray-50 cursor-pointer" @click="openFailedSiteDetail(site)">
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm font-medium text-gray-900" x-text="site.name"></div>
                                     </td>
                                     <td class="px-6 py-4">
                                         <a :href="site.website" target="_blank" rel="noopener noreferrer"
-                                           class="text-sm text-blue-600 hover:text-blue-800 break-all">
+                                           class="text-sm text-blue-600 hover:text-blue-800 break-all"
+                                           @click.stop>
                                             <span x-text="site.website"></span>
                                         </a>
                                     </td>
@@ -415,6 +421,76 @@
         </div>
     </div>
 
+    <!-- Failed Site Detail Modal -->
+    <div x-show="showFailedSiteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+        <div class="w-full max-w-3xl max-h-[85vh] overflow-y-auto bg-white rounded-lg shadow-xl">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-start justify-between">
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-900" x-text="selectedFailedSite?.name || '실패 사이트 상세'"></h3>
+                    <p class="text-sm text-red-600 mt-1" x-text="selectedFailedSite?.website || '-'"></p>
+                </div>
+                <button @click="closeFailedSiteDetail()"
+                        class="text-gray-500 hover:text-gray-700 text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 transition">
+                    닫기
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <div x-show="failedDetailLoading" class="text-sm text-gray-600">실패 로그 로딩 중...</div>
+                <div x-show="failedDetailError" class="text-sm text-red-600" x-text="failedDetailError"></div>
+
+                <div x-show="selectedFailedSite && !failedDetailLoading" class="space-y-4">
+                    <div class="bg-red-50 rounded p-4">
+                        <h4 class="font-semibold text-red-900 mb-2">에러 유형</h4>
+                        <p class="text-sm text-red-800" x-text="selectedFailedSite?.error_type || '-'"></p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-gray-50 rounded p-4">
+                            <h4 class="font-semibold text-gray-900 mb-2">최초 실패 시각</h4>
+                            <p class="text-sm" x-text="formatDate(selectedFailedSite?.first_failed_at)"></p>
+                        </div>
+                        <div class="bg-gray-50 rounded p-4">
+                            <h4 class="font-semibold text-gray-900 mb-2">마지막 확인</h4>
+                            <p class="text-sm" x-text="formatDate(selectedFailedSite?.last_checked_at)"></p>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 rounded p-4">
+                        <h4 class="font-semibold text-gray-900 mb-2">재시도 횟수</h4>
+                        <p class="text-2xl font-bold text-red-600" x-text="(selectedFailedSite?.retry_count || 0) + '회'"></p>
+                    </div>
+
+                    <div class="bg-yellow-50 rounded p-4" x-show="selectedFailedSite?.note">
+                        <h4 class="font-semibold text-yellow-900 mb-2">참고 사항</h4>
+                        <p class="text-sm text-yellow-800" x-text="selectedFailedSite?.note || '-'"></p>
+                    </div>
+
+                    <div>
+                        <h4 class="font-semibold text-gray-900 mb-3">실패 로그 전체</h4>
+                        <div class="space-y-2">
+                            <template x-for="log in failedSiteLogs" :key="log.id + '_' + log.timestamp">
+                                <div class="border rounded p-3 text-sm">
+                                    <div class="flex items-center justify-between">
+                                        <span class="px-2 py-1 rounded text-xs font-medium"
+                                              :class="statusBadgeClass(log.status)"
+                                              x-text="statusLabel(log.status)">
+                                        </span>
+                                        <span class="text-gray-500" x-text="formatDate(log.timestamp)"></span>
+                                    </div>
+                                    <pre class="mt-2 text-xs text-gray-700 whitespace-pre-wrap break-words" x-text="log.message || '-'"></pre>
+                                </div>
+                            </template>
+                            <div x-show="failedSiteLogs.length === 0" class="text-sm text-gray-500">
+                                실패 로그가 없습니다.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="mt-12 pb-8 text-center text-sm text-gray-500">
         <p>College Crawler Monitor v1.0.0 | 
@@ -439,6 +515,11 @@
                 crawlHistory: [],
                 detailLoading: false,
                 detailError: '',
+                showFailedSiteModal: false,
+                selectedFailedSite: null,
+                failedSiteLogs: [],
+                failedDetailLoading: false,
+                failedDetailError: '',
 
                 async init() {
                     await this.fetchData();
@@ -524,6 +605,36 @@
                 closeSchoolDetail() {
                     this.showModal = false;
                     this.detailError = '';
+                },
+
+                async openFailedSiteDetail(site) {
+                    this.showFailedSiteModal = true;
+                    this.selectedFailedSite = site || null;
+                    this.failedSiteLogs = [];
+                    this.failedDetailError = '';
+                    this.failedDetailLoading = true;
+                    try {
+                        const response = await fetch(`./api/failed-sites/detail?website=${encodeURIComponent(site.website || '')}`);
+                        if (!response.ok) {
+                            throw new Error(`실패 상세 API 호출 실패 (${response.status})`);
+                        }
+                        const data = await response.json();
+                        this.selectedFailedSite = data.site || site;
+                        this.failedSiteLogs = data.logs || [];
+                    } catch (error) {
+                        console.error('실패 사이트 상세 로딩 실패:', error);
+                        this.failedDetailError = '실패 상세 로그를 불러오지 못했습니다.';
+                        this.failedSiteLogs = [];
+                    } finally {
+                        this.failedDetailLoading = false;
+                    }
+                },
+
+                closeFailedSiteDetail() {
+                    this.showFailedSiteModal = false;
+                    this.selectedFailedSite = null;
+                    this.failedSiteLogs = [];
+                    this.failedDetailError = '';
                 },
 
                 statusLabel(status) {

@@ -227,25 +227,33 @@ async def get_crawling_stats() -> Dict[str, Any]:
     """
     try:
         with get_db() as db:
-            # 최근 24시간 크롤링 로그
+            total_schools = db.query(School).count()
+            failed_sites_map = _failed_sites_by_website()
+            failed = len(failed_sites_map)
+            success = max(total_schools - failed, 0)
+
+            # 최근 업데이트된 학교 수 (24시간)
             yesterday = datetime.now() - timedelta(days=1)
-            recent_logs = db.query(AuditLog).filter(
-                AuditLog.action == 'CRAWL',
-                AuditLog.created_at >= yesterday
-            ).all()
-            
-            # 성공/실패 카운트 (new_value에 status 정보가 있다고 가정)
-            total = len(recent_logs)
-            success = sum(1 for log in recent_logs 
-                         if log.new_value and log.new_value.get('status') == 'success')
-            failed = total - success
-            
+            recently_updated = db.query(School).filter(
+                School.updated_at >= yesterday
+            ).count()
+
+            latest_crawl_log = (
+                db.query(AuditLog)
+                .filter(AuditLog.action == "CRAWL")
+                .order_by(AuditLog.created_at.desc())
+                .first()
+            )
+
             return {
-                "total": total,
+                "total": total_schools,
                 "success": success,
                 "failed": failed,
-                "success_rate": round((success / total * 100), 1) if total > 0 else 0,
-                "last_crawl": recent_logs[-1].created_at.isoformat() if recent_logs else None
+                "success_rate": round((success / total_schools * 100), 1) if total_schools > 0 else 0,
+                "recently_updated": recently_updated,
+                "last_crawl": latest_crawl_log.created_at.isoformat()
+                if latest_crawl_log and latest_crawl_log.created_at
+                else None,
             }
             
     except Exception as e:
@@ -254,7 +262,9 @@ async def get_crawling_stats() -> Dict[str, Any]:
             "total": 0,
             "success": 0,
             "failed": 0,
-            "success_rate": 0
+            "success_rate": 0,
+            "recently_updated": 0,
+            "last_crawl": None,
         }
 
 
@@ -568,6 +578,71 @@ async def get_failed_sites() -> Dict[str, Any]:
             "total_ssl_failures": 0,
             "error": str(e),
         }
+
+
+@app.get("/api/failed-sites/detail")
+async def get_failed_site_detail(website: str) -> Dict[str, Any]:
+    """실패 사이트 1건의 상세 로그를 조회합니다."""
+    if not website:
+        raise HTTPException(status_code=400, detail="website 쿼리 파라미터가 필요합니다")
+
+    failed_site = _failed_sites_by_website().get(website)
+    if not failed_site:
+        raise HTTPException(status_code=404, detail="실패 사이트를 찾을 수 없습니다")
+
+    try:
+        with get_db() as db:
+            school = db.query(School).filter(School.website == website).first()
+            logs: List[Dict[str, Any]] = []
+
+            if school:
+                crawl_logs = (
+                    db.query(AuditLog)
+                    .filter(
+                        AuditLog.action == "CRAWL",
+                        AuditLog.record_id == school.id,
+                    )
+                    .order_by(AuditLog.created_at.desc())
+                    .limit(50)
+                    .all()
+                )
+
+                for log in crawl_logs:
+                    status, message = _extract_crawl_status(log.new_value)
+                    if status not in ("failed", "skipped"):
+                        continue
+                    logs.append(
+                        {
+                            "id": str(log.id),
+                            "timestamp": log.created_at.isoformat() if log.created_at else None,
+                            "status": status,
+                            "message": message,
+                            "raw": log.new_value if isinstance(log.new_value, dict) else {},
+                        }
+                    )
+
+            if not logs:
+                logs.append(
+                    {
+                        "id": "failed-site",
+                        "timestamp": failed_site.get("last_checked_at")
+                        or failed_site.get("first_failed_at"),
+                        "status": "failed",
+                        "message": failed_site.get("error_message") or "SSL 검증 실패",
+                        "raw": failed_site,
+                    }
+                )
+
+            return {
+                "site": failed_site,
+                "school_id": str(school.id) if school else None,
+                "logs": logs,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"실패 사이트 상세 조회 실패: {website} - {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 async def generate_events():
