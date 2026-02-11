@@ -45,6 +45,14 @@ class School(Base):
     staff_info = Column(JSONB)  # 스텝 현황
     esl_program = Column(JSONB)  # ESL 프로그램
     international_support = Column(JSONB)  # 유학생 지원
+
+    # 크롤링 메타데이터 (하이브리드 설계: schools에 "최신 상태"를 저장)
+    # - 모니터 통계/최근 업데이트는 이 컬럼을 우선 사용
+    # - 상세 히스토리는 audit_logs(append-only)로 보존
+    last_crawled_at = Column(TIMESTAMP(timezone=True))
+    last_crawl_status = Column(String(20))  # success|failed|skipped|unknown
+    last_crawl_message = Column(Text)
+    last_crawl_data_updated_at = Column(TIMESTAMP(timezone=True))
     
     # Relationships
     programs = relationship("Program", back_populates="school")

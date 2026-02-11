@@ -157,6 +157,24 @@ jobs:
               fi
               ATTEMPT=$((ATTEMPT + 1))
             done
+
+            # DB 마이그레이션 (하이브리드 설계용 컬럼 추가 등)
+            echo "Running DB migrations (alembic upgrade head)..."
+            MIG_ATTEMPTS=3
+            MIG_TRY=1
+            while [ $MIG_TRY -le $MIG_ATTEMPTS ]; do
+              echo "Migration attempt $MIG_TRY of $MIG_ATTEMPTS..."
+              if docker run --rm --env-file .env patrick5471/college-crawler:latest alembic -c alembic.ini upgrade head 2>&1; then
+                echo "✓ Alembic migration completed"
+                break
+              fi
+              if [ $MIG_TRY -lt $MIG_ATTEMPTS ]; then
+                sleep $((MIG_TRY * 5))
+              else
+                echo "✗ Alembic migration failed (continuing deploy, but features may be degraded)"
+              fi
+              MIG_TRY=$((MIG_TRY + 1))
+            done
             
             # Start crawler and monitor
             echo "Starting college-crawler and monitor..."

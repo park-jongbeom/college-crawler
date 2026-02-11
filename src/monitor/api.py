@@ -222,16 +222,11 @@ async def get_database_status() -> Dict[str, Any]:
             
             # 최근 업데이트된 학교 (24시간 이내)
             yesterday = datetime.now() - timedelta(days=1)
-            # "최근 업데이트"를 DB updated_at이 아닌 "최근 크롤링 시각" 기준으로 계산
+            # 하이브리드 설계: schools.last_crawled_at을 "최근 업데이트"의 1차 소스로 사용
             recently_updated = (
                 db.query(School.id)
-                .join(AuditLog, AuditLog.record_id == School.id)
-                .filter(
-                    AuditLog.table_name == "schools",
-                    _crawl_auditlog_filter(),
-                    AuditLog.created_at >= yesterday,
-                )
-                .distinct()
+                .filter(School.last_crawled_at != None)  # noqa: E711
+                .filter(School.last_crawled_at >= yesterday)
                 .count()
             )
             
@@ -244,7 +239,9 @@ async def get_database_status() -> Dict[str, Any]:
                 "schools_with_employment_rate": schools_with_employment_rate,
                 "schools_with_facilities": schools_with_facilities,
                 "recently_updated": recently_updated,
-                "completion_rate": round((schools_with_email / total_schools * 100), 1) if total_schools > 0 else 0
+                # NOTE: 이 값은 "크롤링 성공률"이 아니라 "연락처(이메일) 채움률"입니다.
+                "completion_rate": round((schools_with_email / total_schools * 100), 1) if total_schools > 0 else 0,
+                "contact_completion_rate": round((schools_with_email / total_schools * 100), 1) if total_schools > 0 else 0,
             }
             
     except Exception as e:
@@ -266,84 +263,57 @@ async def get_crawling_stats() -> Dict[str, Any]:
     try:
         with get_db() as db:
             total_schools = db.query(School).count()
-            # 중요: 성공/실패 통계는 "실제 크롤링 이력(AuditLog)" 기준으로 계산해야 합니다.
-            # SSL 실패 사이트 목록(failed_sites.json)은 '스킵 후보'일 뿐, 성공/실패 결과의 근거가 아닙니다.
-            success = 0
-            failed = 0
-
-            latest_per_school = (
-                db.query(
-                    AuditLog.record_id.label("school_id"),
-                    func.max(AuditLog.created_at).label("last_crawl_at"),
-                )
-                .filter(
-                    AuditLog.table_name == "schools",
-                    _crawl_auditlog_filter(),
-                )
-                .group_by(AuditLog.record_id)
-                .subquery()
+            # 하이브리드 설계: schools.last_crawl_* 컬럼을 통계의 1차 소스로 사용
+            attempted = db.query(School).filter(School.last_crawled_at != None).count()  # noqa: E711
+            success = (
+                db.query(School)
+                .filter(School.last_crawl_status == "success")
+                .count()
             )
-
-            latest_logs = (
-                db.query(AuditLog.record_id, AuditLog.new_value)
-                .join(
-                    latest_per_school,
-                    (AuditLog.record_id == latest_per_school.c.school_id)
-                    & (AuditLog.created_at == latest_per_school.c.last_crawl_at),
-                )
-                .all()
+            failed = (
+                db.query(School)
+                .filter(School.last_crawl_status == "failed")
+                .count()
             )
-
-            for _school_id, new_value in latest_logs:
-                status, _message = _extract_crawl_status(new_value)
-                if status == "success":
-                    success += 1
-                elif status == "failed":
-                    failed += 1
-
-            # 최근 업데이트된 학교 수 (24시간)
-            yesterday = datetime.now() - timedelta(days=1)
-            # "최근 업데이트"를 DB updated_at이 아닌 "최근 크롤링 시각" 기준으로 계산
-            recently_updated = (
-                db.query(School.id)
-                .join(AuditLog, AuditLog.record_id == School.id)
-                .filter(
-                    AuditLog.table_name == "schools",
-                    _crawl_auditlog_filter(),
-                    AuditLog.created_at >= yesterday,
-                )
-                .distinct()
+            skipped = (
+                db.query(School)
+                .filter(School.last_crawl_status == "skipped")
                 .count()
             )
 
-            latest_crawl_log = (
-                db.query(AuditLog)
-                .filter(
-                    AuditLog.table_name == "schools",
-                    _crawl_auditlog_filter(),
-                )
-                .order_by(AuditLog.created_at.desc())
-                .first()
+            yesterday = datetime.now() - timedelta(days=1)
+            recently_updated = (
+                db.query(School.id)
+                .filter(School.last_crawled_at != None)  # noqa: E711
+                .filter(School.last_crawled_at >= yesterday)
+                .count()
             )
+
+            last_crawl_at = db.query(func.max(School.last_crawled_at)).scalar()
 
             return {
                 "total": total_schools,
+                "attempted": attempted,
                 "success": success,
                 "failed": failed,
-                "success_rate": round((success / total_schools * 100), 1) if total_schools > 0 else 0,
+                "skipped": skipped,
+                # NOTE: success_rate는 "시도(attempted)" 기준이 더 직관적입니다.
+                "success_rate": round((success / attempted * 100), 1) if attempted > 0 else 0,
+                "coverage_rate": round((attempted / total_schools * 100), 1) if total_schools > 0 else 0,
                 "recently_updated": recently_updated,
-                "last_crawl": latest_crawl_log.created_at.isoformat()
-                if latest_crawl_log and latest_crawl_log.created_at
-                else None,
+                "last_crawl": last_crawl_at.isoformat() if last_crawl_at else None,
             }
             
     except Exception as e:
         logger.error(f"크롤링 통계 조회 실패: {e}")
         return {
             "total": 0,
+            "attempted": 0,
             "success": 0,
             "failed": 0,
+            "skipped": 0,
             "success_rate": 0,
+            "coverage_rate": 0,
             "recently_updated": 0,
             "last_crawl": None,
         }
@@ -466,30 +436,8 @@ async def get_recent_schools(
     try:
         with get_db() as db:
             failed_sites_map = _failed_sites_by_website()
-
-            # 최근 업데이트 기준을 "School.updated_at"이 아닌 "최근 크롤링(AuditLog.created_at)"으로 변경.
-            # - AuditLog는 record_id = schools.id 로 저장됨
-            # - 학교별 최신 CRAWL 시각을 서브쿼리로 만들어 정렬/페이징에 사용
-            latest_crawl_at_subq = (
-                db.query(
-                    AuditLog.record_id.label("school_id"),
-                    func.max(AuditLog.created_at).label("last_crawl_at"),
-                )
-                .filter(
-                    AuditLog.table_name == "schools",
-                    _crawl_auditlog_filter(),
-                )
-                .group_by(AuditLog.record_id)
-                .subquery()
-            )
-
-            base = (
-                db.query(School)
-                .outerjoin(
-                    latest_crawl_at_subq,
-                    latest_crawl_at_subq.c.school_id == School.id,
-                )
-            )
+            # 하이브리드 설계: 최근 업데이트(정렬)는 schools.last_crawled_at을 우선 사용
+            base = db.query(School)
             if state and state.strip():
                 base = base.filter(School.state == state.strip())
             if school_type and school_type.strip():
@@ -503,35 +451,16 @@ async def get_recent_schools(
 
             schools = (
                 base.order_by(
-                    # 최신 크롤링 시각 기준 내림차순, 크롤 이력 없는 학교는 뒤로
-                    latest_crawl_at_subq.c.last_crawl_at.desc().nullslast(),
-                    # 타이브레이커 (동일 시각/NULL일 때는 DB updated_at로 정렬)
+                    School.last_crawled_at.desc().nullslast(),
                     School.updated_at.desc().nullslast(),
                 )
                 .offset(offset)
                 .limit(per_page)
                 .all()
             )
-            school_ids = [school.id for school in schools]
-            latest_logs_by_school: Dict[uuid.UUID, AuditLog] = {}
-            if school_ids:
-                crawl_logs = (
-                    db.query(AuditLog)
-                    .filter(
-                        _crawl_auditlog_filter(),
-                        AuditLog.record_id.in_(school_ids),
-                    )
-                    .order_by(AuditLog.created_at.desc())
-                    .all()
-                )
-                for log in crawl_logs:
-                    if log.record_id not in latest_logs_by_school:
-                        latest_logs_by_school[log.record_id] = log
-
             items = [
                 _build_recent_school_item(
                     school,
-                    latest_logs_by_school.get(school.id),
                     failed_sites_map.get(school.website or ""),
                 )
                 for school in schools
@@ -552,15 +481,11 @@ async def get_recent_schools(
 
 def _build_recent_school_item(
     school: School,
-    latest_log: Optional[AuditLog],
     failed_site: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    crawl_status, crawl_message = _extract_crawl_status(
-        latest_log.new_value if latest_log else None
-    )
-    crawl_updated_at = (
-        latest_log.created_at.isoformat() if latest_log and latest_log.created_at else None
-    )
+    crawl_status = (school.last_crawl_status or "unknown").lower()
+    crawl_message = school.last_crawl_message or ""
+    crawl_updated_at = school.last_crawled_at.isoformat() if school.last_crawled_at else None
     if failed_site:
         crawl_status = "failed"
         crawl_message = str(failed_site.get("error_message") or "SSL 검증 실패")
@@ -616,7 +541,7 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                 .all()
             )
 
-            crawl_history = [
+            crawl_history: List[Dict[str, Any]] = [
                 {
                     "id": str(log.id),
                     "timestamp": log.created_at.isoformat() if log.created_at else None,
@@ -626,6 +551,23 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                 }
                 for log in crawl_logs
             ]
+
+            # schools에 저장된 "최신 상태"를 최상단에 표시(하이브리드 설계)
+            if school.last_crawled_at or school.last_crawl_status or school.last_crawl_message:
+                crawl_history.insert(
+                    0,
+                    {
+                        "id": "latest",
+                        "timestamp": school.last_crawled_at.isoformat() if school.last_crawled_at else None,
+                        "status": (school.last_crawl_status or "unknown").lower(),
+                        "message": school.last_crawl_message or "크롤링 이력 없음",
+                        "raw": {
+                            "last_crawl_data_updated_at": school.last_crawl_data_updated_at.isoformat()
+                            if school.last_crawl_data_updated_at
+                            else None,
+                        },
+                    },
+                )
             if failed_site:
                 crawl_history.insert(
                     0,
@@ -646,8 +588,8 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                         "timestamp": school.updated_at.isoformat()
                         if school.updated_at
                         else None,
-                        "status": "success",
-                        "message": "최근 DB 업데이트 기준",
+                        "status": "unknown",
+                        "message": "크롤링 이력 없음(최근 DB 업데이트만 존재)",
                         "raw": {},
                     }
                 )
@@ -674,6 +616,12 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                     "transfer_rate": school.transfer_rate,
                     "graduation_rate": school.graduation_rate,
                     "updated_at": school.updated_at.isoformat() if school.updated_at else None,
+                    "last_crawled_at": school.last_crawled_at.isoformat() if school.last_crawled_at else None,
+                    "last_crawl_status": (school.last_crawl_status or "unknown").lower(),
+                    "last_crawl_message": school.last_crawl_message,
+                    "last_crawl_data_updated_at": school.last_crawl_data_updated_at.isoformat()
+                    if school.last_crawl_data_updated_at
+                    else None,
                 },
                 "crawl_history": crawl_history,
             }

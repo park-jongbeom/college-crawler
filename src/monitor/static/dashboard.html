@@ -160,11 +160,14 @@
                     <div class="mt-6">
                         <div class="w-full bg-gray-200 rounded-full h-4">
                             <div class="bg-gradient-to-r from-green-500 to-blue-500 h-4 rounded-full transition-all" 
-                                 :style="'width: ' + (status.database?.completion_rate || 0) + '%'">
+                                 :style="'width: ' + (status.crawling?.coverage_rate || 0) + '%'">
                             </div>
                         </div>
                         <p class="text-center text-sm text-gray-600 mt-2">
-                            전체 완료율: <span class="font-semibold" x-text="(status.database?.completion_rate || 0).toFixed(1) + '%'"></span>
+                            크롤링 완료율(커버리지): <span class="font-semibold" x-text="(status.crawling?.coverage_rate || 0).toFixed(1) + '%'"></span>
+                        </p>
+                        <p class="text-center text-xs text-gray-500 mt-1">
+                            연락처 완료율(이메일): <span class="font-semibold" x-text="(status.database?.contact_completion_rate || status.database?.completion_rate || 0).toFixed(1) + '%'"></span>
                         </p>
                         <p class="text-center text-xs text-gray-500 mt-2">
                             최근 업데이트 학교: <span class="font-semibold" x-text="status.crawling?.recently_updated || 0"></span>개

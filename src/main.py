@@ -4,12 +4,16 @@ College Crawler 메인 실행 파일
 
 import argparse
 import json
+import os
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from sqlalchemy import text
 
 from src.crawlers.school_crawler import SchoolCrawler
 from src.database.connection import get_db
@@ -20,6 +24,7 @@ from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
+_AUDIT_USER_ID_CACHE: Optional[uuid.UUID] = None
 
 
 def load_schools_list(json_file: Path) -> list:
@@ -47,6 +52,54 @@ def _find_school_record(db, name: str, website: str) -> Optional[School]:
         return school
 
     return db.query(School).filter(School.name == name).first()
+
+
+def _resolve_audit_user_id(db) -> Optional[uuid.UUID]:
+    """
+    운영 DB에서 audit_logs.user_id/created_by/updated_by가 NOT NULL(및 FK)일 수 있어
+    "실존하는 users.id"를 해석합니다.
+
+    우선순위:
+    1) 환경변수 AUDIT_SYSTEM_USER_ID 또는 AUDIT_USER_ID (UUID)
+    2) users 테이블에서 가장 오래된 1개(id) 선택
+    """
+    global _AUDIT_USER_ID_CACHE
+    if _AUDIT_USER_ID_CACHE:
+        return _AUDIT_USER_ID_CACHE
+
+    env_value = os.getenv("AUDIT_SYSTEM_USER_ID") or os.getenv("AUDIT_USER_ID")
+    if env_value:
+        try:
+            _AUDIT_USER_ID_CACHE = uuid.UUID(env_value.strip())
+            return _AUDIT_USER_ID_CACHE
+        except ValueError:
+            logger.warning(f"AUDIT_SYSTEM_USER_ID/AUDIT_USER_ID 형식 오류(무시): {env_value!r}")
+
+    try:
+        row = db.execute(text("SELECT id FROM users ORDER BY created_at ASC LIMIT 1")).fetchone()
+        if row and row[0]:
+            _AUDIT_USER_ID_CACHE = uuid.UUID(str(row[0]))
+            return _AUDIT_USER_ID_CACHE
+    except Exception as e:
+        logger.warning(f"audit user_id 자동 해석 실패(무시): {e}")
+
+    return None
+
+
+def _update_school_crawl_metadata(name: str, website: str, status: str, message: str) -> None:
+    """schools 최신 크롤링 상태 컬럼을 갱신합니다(실패/스킵 포함)."""
+    try:
+        with get_db() as db:
+            school = _find_school_record(db, name, website)
+            if not school:
+                return
+            now = datetime.now(timezone.utc)
+            school.last_crawled_at = now
+            school.last_crawl_status = status
+            school.last_crawl_message = message
+            db.flush()
+    except Exception as e:
+        logger.warning(f"schools 크롤링 메타데이터 갱신 실패(무시): {name} - {e}")
 
 
 def _build_school_payload(
@@ -94,6 +147,12 @@ def _record_crawl_audit(
     """크롤링 감사 로그를 기록합니다."""
     try:
         with get_db() as db:
+            audit_user_id = _resolve_audit_user_id(db)
+            if audit_user_id is None:
+                # 운영 DB 제약 때문에 audit 저장이 실패해도 크롤링 자체가 계속 돌아가야 합니다.
+                logger.error("AuditLog user_id 해석 실패로 audit 기록을 건너뜁니다.")
+                return
+
             resolved_school_id = school_id
             if resolved_school_id is None:
                 school = _find_school_record(db, name, website)
@@ -123,12 +182,10 @@ def _record_crawl_audit(
                     action="UPDATE",
                     new_value=new_value,
                     ip_address="crawler-system",
-                    # 운영 DB에서는 audit_logs.created_by 등이 users FK를 가지는 경우가 있어
-                    # 존재하지 않는 시스템 UUID를 넣으면 FK 위반으로 저장에 실패합니다.
-                    # 따라서 크롤러 시스템 이벤트는 NULL로 기록합니다.
-                    user_id=None,
-                    created_by=None,
-                    updated_by=None,
+                    # 운영 DB 제약 대응: NOT NULL 및 FK를 만족하는 users.id를 기록합니다.
+                    user_id=audit_user_id,
+                    created_by=audit_user_id,
+                    updated_by=audit_user_id,
                 )
             )
     except Exception as e:
@@ -184,7 +241,12 @@ def crawl_single_school(
                     )
 
                     saved_school: Optional[School] = None
+                    data_changed = False
                     if existing_school:
+                        for key, value in school_payload.items():
+                            if getattr(existing_school, key, None) != value:
+                                data_changed = True
+                                break
                         repo.update(existing_school.id, school_payload)
                         saved_school = existing_school
                         logger.info(f"DB 업데이트 완료: {name}")
@@ -195,9 +257,18 @@ def crawl_single_school(
                             )
                         else:
                             saved_school = repo.create(school_payload)
+                            data_changed = True
                             logger.info(f"DB 생성 완료: {name}")
 
                     if saved_school:
+                        now = datetime.now(timezone.utc)
+                        saved_school.last_crawled_at = now
+                        saved_school.last_crawl_status = "success"
+                        saved_school.last_crawl_message = "크롤링 완료"
+                        if data_changed:
+                            saved_school.last_crawl_data_updated_at = now
+                        db.flush()
+
                         result["school_id"] = str(saved_school.id)
                         _record_crawl_audit(
                             status="success",
@@ -289,6 +360,12 @@ def crawl_all_schools(json_file: Path, limit: int = None) -> None:
                     "error_message": skip_reason,
                 },
             )
+            _update_school_crawl_metadata(
+                name=name,
+                website=website,
+                status="skipped",
+                message=f"건너뜀: {skip_reason}",
+            )
             fail_count += 1
             continue
         
@@ -316,6 +393,12 @@ def crawl_all_schools(json_file: Path, limit: int = None) -> None:
                         "error_message": result.get("ssl_error_message", ""),
                     },
                 )
+                _update_school_crawl_metadata(
+                    name=name,
+                    website=website,
+                    status="failed",
+                    message="SSL 검증 실패로 크롤링 중단",
+                )
                 fail_count += 1
             elif result.get("success", False):
                 success_count += 1
@@ -332,6 +415,12 @@ def crawl_all_schools(json_file: Path, limit: int = None) -> None:
                         "error_message": "크롤링 처리 실패",
                     },
                 )
+                _update_school_crawl_metadata(
+                    name=name,
+                    website=website,
+                    status="failed",
+                    message="크롤링 처리 실패",
+                )
                 fail_count += 1
         except Exception as e:
             logger.error(f"❌ 실패: {e}")
@@ -344,6 +433,12 @@ def crawl_all_schools(json_file: Path, limit: int = None) -> None:
                     "error_type": "exception",
                     "error_message": str(e),
                 },
+            )
+            _update_school_crawl_metadata(
+                name=name,
+                website=website,
+                status="failed",
+                message="예외 발생으로 크롤링 실패",
             )
             fail_count += 1
     
