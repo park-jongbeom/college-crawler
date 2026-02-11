@@ -28,12 +28,13 @@ services:
       - bash
       - -c
       - |
-        # Install cron for Debian-based image
-        apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
-        # Setup cron job: daily at 2 AM
-        echo "0 2 * * * cd /app && python src/main.py crawl >> /app/logs/cron.log 2>&1" | crontab -
-        # Start cron in foreground
-        cron && tail -f /dev/null
+        # Dockerfile에서 cron/bash를 사전 설치합니다. (여기서 apt-get 금지)
+        # CRON_TZ로 컨테이너/호스트 TZ와 무관하게 KST 새벽 2시 실행을 보장합니다.
+        printf "CRON_TZ=Asia/Seoul\n0 2 * * * cd /app && python src/main.py crawl >> /app/logs/cron.log 2>&1\n" | crontab -
+
+        # cron 데몬 실행 (foreground 옵션이 없는 경우도 있어 daemonize 후 유지)
+        cron
+        tail -f /dev/null
 
   monitor:
     image: patrick5471/college-crawler:latest
