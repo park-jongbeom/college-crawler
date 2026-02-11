@@ -26,14 +26,6 @@ class Config:
         """PostgreSQL 연결 URL"""
         return f"postgresql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
     
-    # Email Settings
-    SMTP_HOST: str = os.getenv('SMTP_HOST', 'smtp.gmail.com')
-    SMTP_PORT: int = int(os.getenv('SMTP_PORT', '587'))
-    SMTP_USERNAME: str = os.getenv('SMTP_USERNAME', '')
-    SMTP_PASSWORD: str = os.getenv('SMTP_PASSWORD', '')
-    FROM_EMAIL: str = os.getenv('FROM_EMAIL', '')
-    FROM_NAME: str = os.getenv('FROM_NAME', 'Go Almond Team')
-    
     # Crawling Settings
     CRAWL_DELAY: int = int(os.getenv('CRAWL_DELAY', '2'))
     MAX_RETRY: int = int(os.getenv('MAX_RETRY', '3'))
