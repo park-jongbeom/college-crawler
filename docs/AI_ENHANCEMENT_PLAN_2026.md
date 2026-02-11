@@ -1,0 +1,406 @@
+# AI 유학 상담 고도화 계획 2026
+
+**작성일**: 2026년 2월  
+**문서 버전**: 1.0  
+**대상 독자**: 경영진 및 기술팀
+
+---
+
+## Executive Summary
+
+### 현재 시스템 현황
+
+우리의 AI 유학 상담 시스템은 RAG(Retrieval-Augmented Generation) 기반으로 84개 학교 데이터를 활용해 학생에게 맞춤형 학교를 추천합니다. 그러나 현재 다음과 같은 한계가 있습니다:
+
+**핵심 이슈**:
+- **데이터 부족으로 인한 Fallback 발생률 약 70%**: 벡터 검색이 실패하여 일반적인 추천에 의존
+- **학교 정보의 깊이 부족**: 기본 메타데이터(이름, 위치, 학비)만 있고, 합격률·초봉·프로그램 상세 등 핵심 의사결정 정보 부재
+- **설명의 구체성 부족**: "좋은 학교입니다" 수준의 일반적 설명, 실제 데이터 기반 근거 미흡
+
+### 비즈니스 임팩트
+
+이러한 한계는 다음과 같은 비즈니스 리스크로 이어집니다:
+
+- **사용자 신뢰도 하락**: 구체적이지 않은 추천으로 인한 만족도 저하
+- **경쟁력 약화**: 타 유학 상담 서비스 대비 정보 품질 열위
+- **재방문율 감소**: 피상적인 추천으로 인한 고객 이탈
+
+**예상 개선 효과**:
+- 벡터 검색 정확도 30% 향상 → Fallback 발생률 70% → 40%로 감소
+- 매칭 결과 설명 품질 70% 향상 → "이 학교는 Google, Microsoft와 파트너십이 있으며 취업률 95%입니다" 수준의 구체적 설명
+- 사용자 만족도 및 재방문율 증가 → 서비스 경쟁력 강화
+
+### 3단계 점진적 개선 전략
+
+본 계획은 **Level 1 → Level 2 → Level 3** 순서로 점진적으로 데이터를 확장하고 RAG 품질을 향상시킵니다:
+
+```
+Level 1: 메타데이터 보강 (기본 통계)
+    ↓
+Level 2: 프로그램 상세 정보 (커리큘럼, 진로)
+    ↓
+Level 3: 정성적 컨텍스트 (리뷰, 가이드)
+```
+
+각 단계는 **TDD(Test-Driven Development)** 방식으로 개발하여 품질을 보장하며, 사용자 피드백을 반영한 **자가 개선 루프**를 구축합니다.
+
+---
+
+## 기술적 개선 전략
+
+### 시스템 아키텍처 개요
+
+```mermaid
+flowchart TD
+    User[사용자 질의] --> Matching[매칭 엔진]
+    Matching --> Vector[벡터 검색]
+    Vector --> RAG[RAG 컨텍스트]
+    
+    Crawler[크롤러] --> DB[(PostgreSQL)]
+    DB --> Embedding[임베딩 생성]
+    Embedding --> VectorStore[Vector Store]
+    VectorStore --> Vector
+    
+    RAG --> Gemini[Gemini AI]
+    Gemini --> Result[매칭 결과]
+    Result --> User
+    
+    Result --> Feedback[피드백 수집]
+    Feedback --> Analysis[데이터 갭 분석]
+    Analysis --> Priority[크롤링 우선순위]
+    Priority --> Crawler
+```
+
+### Level 1: 메타데이터 확장
+
+**목표**: embedding_text 품질 향상 → 벡터 검색 정확도 개선
+
+**수집 대상 필드** (우선순위 순):
+1. **합격률, 편입률, 졸업률** - 입학 가능성 판단
+2. **평균 초봉, 취업률** - 진로 연계성 지표
+3. **국제학생 비율, 국제학생 수** - 유학생 친화도
+4. **기숙사 여부, 캠퍼스 위치** - 생활 편의성
+5. **학비 세부 (in-state vs out-of-state)** - 예산 적합도
+
+**데이터 수집 전략**:
+- **소스 1**: 학교 공식 웹사이트 (Fact Sheet, About Us)
+- **소스 2**: College Scorecard API (미국 교육부 공공 데이터)
+- **소스 3**: IPEDS 데이터베이스 (통계청)
+
+**구현 방식**:
+- 기존 `SchoolCrawler` 확장
+- 새 파서 모듈: `StatisticsParser` (TDD 방식 개발)
+- College Scorecard API 연동 모듈 구축
+
+**예상 효과**:
+- `embedding_text` 품질 50% 향상 (현재 평균 150자 → 300자)
+- 벡터 검색 Top 20 정확도 30% 개선
+- Fallback 발생률 감소 (70% → 40%)
+
+**완료 기준**:
+- 84개 학교 중 80% 이상이 acceptance_rate, graduation_rate 보유
+- 평균 embedding_text 길이 250자 이상
+- 벡터 검색 Top 20에 target_location 일치율 70% 이상
+
+### Level 2: 프로그램 상세 정보
+
+**목표**: 프로그램별 RAG 컨텍스트 구축 → 전공/커리어 연계성 강화
+
+**수집 대상**:
+1. **프로그램별 커리큘럼**: 핵심 과목, 학점, 이수 요건
+2. **진로 연계**: 졸업생 진로, 취업 파트너 기업, 인턴십 프로그램
+3. **입학 요건**: 전공별 GPA/영어 점수 최저 기준
+4. **프로그램 특색**: STEM OPT, CPT, 산학 협력
+
+**데이터 수집 전략**:
+- 학교 웹사이트 Programs/Academics 페이지 Deep Crawling
+- 각 프로그램 상세 페이지 순회 (현재는 목록만 수집)
+- 상위 30개 학교 우선 수집
+
+**RAG 통합**:
+- `program_documents` 테이블 활용 (document_type: curriculum, career_outcome)
+- 매칭 시 관련 프로그램 문서 검색 → `explanation` 생성 시 컨텍스트로 활용
+- ExplanationService에 RAG 컨텍스트 주입
+
+**예상 효과**:
+- 설명 품질 70% 향상 (일반 문구 → 실제 데이터 기반)
+- "이 프로그램은 Google, Microsoft와 인턴십 프로그램이 있습니다" 등 구체적 설명 가능
+- 전공별 맞춤 추천 정확도 향상
+
+**완료 기준**:
+- 상위 30개 학교의 프로그램별 `program_documents` 3건 이상
+- `explanation` 필드에 "커리큘럼", "진로", "취업" 키워드 포함률 60% 이상
+
+### Level 3: 정성적 컨텍스트
+
+**목표**: 학교별 종합 평가 자료 구축 → 사용자 신뢰도 극대화
+
+**수집 대상**:
+1. **학교 리뷰**: Niche.com, College Confidential 등 리뷰 사이트
+2. **입학 가이드**: Admission Tips, Essay Prompts, 면접 전략
+3. **장단점 분석**: 각 학교의 강점/약점 (예: 편입률 높음 vs 기숙사 부족)
+4. **최신 뉴스**: 학교 랭킹 변동, 신규 프로그램
+
+**데이터 수집 전략**:
+- **외부 사이트**: Niche.com (학생 리뷰), U.S. News (랭킹)
+- **주의사항**: robots.txt 준수, Rate Limiting (요청 간 5초 대기)
+- 인기 학교 20개 우선 수집
+
+**RAG 통합**:
+- `school_documents` 테이블 활용 (document_type: review, pros_cons)
+- 매칭 결과의 `pros`/`cons` 필드를 실제 리뷰에서 추출
+- ProsConsService 개발 (RAG 기반 장단점 자동 생성)
+
+**예상 효과**:
+- "학생 리뷰에서 94%가 '교수진이 친절하다'고 평가" 등 신뢰도 높은 설명
+- Fallback 시에도 외부 데이터 기반 추천 가능
+- 매칭 결과의 pros/cons 품질 90% 향상
+
+**완료 기준**:
+- 인기 학교 20개에 `school_documents` 5건 이상 (리뷰, 가이드)
+- `pros`/`cons` 필드에 실제 리뷰 인용 포함률 50% 이상
+
+---
+
+## TDD (Test-Driven Development) 적용 전략
+
+### TDD 개요
+
+모든 개발은 **Red-Green-Refactor** 사이클을 따릅니다:
+
+```mermaid
+flowchart LR
+    Red[Red: 실패 테스트 작성] --> Green[Green: 최소 구현]
+    Green --> Refactor[Refactor: 개선]
+    Refactor --> Verify[테스트 재실행]
+    Verify --> Red
+```
+
+### 적용 범위
+
+1. **크롤러 개발**: 파서 단위 테스트 (Mock HTML → 실제 크롤링)
+2. **RAG 품질 검증**: 데이터 충족도, 검색 품질, E2E 매칭 테스트
+3. **API 개선**: 새 필드 추가, 프롬프트 개선 시 예상 응답 테스트
+4. **통합 테스트**: Level별 완료 기준 자동 검증
+
+### 테스트 커버리지 목표
+
+| 영역 | 목표 커버리지 | 측정 도구 |
+|------|--------------|----------|
+| 크롤러 (Python) | 85% 이상 | pytest-cov |
+| 백엔드 (Kotlin) | 80% 이상 | JaCoCo |
+| 통합 테스트 | 필수 시나리오 100% | JUnit5, pytest |
+
+### 예시: Level 1 완료 기준 자동 검증
+
+```kotlin
+@Test
+fun `Level 1 완료 기준: 데이터 충족도`() {
+    // 학교 데이터 80% 이상 메타데이터 보유
+    val schools = schoolRepository.findAll()
+    val metadataCompleteCount = schools.count { 
+        it.acceptanceRate != null && it.graduationRate != null 
+    }
+    val completionRate = metadataCompleteCount.toDouble() / schools.size
+    
+    assertThat(completionRate)
+        .withFailMessage("메타데이터 완성도: ${(completionRate * 100).roundToInt()}% (목표: 80%)")
+        .isGreaterThanOrEqualTo(0.8)
+}
+```
+
+---
+
+## 자가 개선 루프 (Self-Improvement Loop)
+
+### 개념
+
+시스템이 사용자 피드백을 기반으로 자동으로 데이터 수집 우선순위를 조정하는 메커니즘입니다.
+
+```mermaid
+graph LR
+    User[사용자 질의] --> Matching[매칭 엔진]
+    Matching --> Result[결과 제공]
+    Result --> Feedback[피드백 수집]
+    
+    Feedback --> Analytics[분석]
+    Analytics --> GapAnalysis[데이터 갭 분석]
+    GapAnalysis --> CrawlPriority[크롤링 우선순위]
+    CrawlPriority --> Crawler[크롤러 실행]
+    Crawler --> DB[DB 업데이트]
+    DB --> Embedding[임베딩 재생성]
+    Embedding --> Matching
+```
+
+### 우선순위 결정 요소
+
+1. **사용자 질문 빈도**: "평균 초봉이 얼마인가요?" → 초봉 데이터 우선 수집
+2. **Fallback 발생률**: 특정 전공/지역에서 Fallback 빈도 높음 → 해당 카테고리 학교 추가
+3. **데이터 갭 분석**: RAG 데이터 충족도 검증 결과 기반
+4. **ROI**: 수집 비용(시간) 대비 매칭 정확도 향상 효과
+
+### 구현 예시
+
+```python
+def calculate_priority(school_info, feedback_data):
+    priority_score = 0
+    
+    # 1. 현재 데이터 품질 (낮을수록 높은 우선순위)
+    if not school_info.get('acceptance_rate'):
+        priority_score += 10
+    if not school_info.get('description') or len(school_info['description']) < 100:
+        priority_score += 8
+    
+    # 2. 사용자 피드백 빈도
+    query_count = feedback_data.get('schools', {}).get(school_info['name'], 0)
+    priority_score += min(query_count, 20)  # 최대 20점
+    
+    # 3. 지역/전공 커버리지 (부족한 카테고리 우선)
+    if school_info['state'] in ['FL', 'WA']:  # 현재 부족 지역
+        priority_score += 15
+    
+    return priority_score
+```
+
+---
+
+## 프롬프트 엔지니어링 개선
+
+### 현재 한계
+
+현재 Fallback 프롬프트는 사용자 프로필만 사용하고 학교 데이터를 활용하지 못합니다:
+- **한계**: "일반적인 추천" 수준, 구체성 부족
+- **예시**: "캘리포니아에 좋은 학교들이 있습니다" (어떤 학교인지 구체적 정보 없음)
+
+### 단계별 강화 전략
+
+#### Phase 1: 메타데이터 기반 Few-shot Learning (Level 1 완료 후)
+
+```kotlin
+// embedding_text를 프롬프트에 포함
+val topSchools = schoolRepository.findTop10ByState(preference.targetLocation)
+val examplesText = topSchools.joinToString("\n") { 
+    embeddingService.buildSchoolText(it) 
+}
+
+val prompt = """
+[참고할 학교 예시]
+$examplesText
+
+위 학교들과 유사한 수준에서 다음 학생에게 추천해주세요.
+...
+"""
+```
+
+#### Phase 2: RAG 컨텍스트 주입 (Level 2 완료 후)
+
+```kotlin
+// 벡터 검색 결과를 프롬프트에 포함
+val similarSchools = vectorSearchService.searchSimilarSchools(user, profile, preference, topK = 10)
+val schoolContexts = similarSchools.map { 
+    "${it.name}: ${it.description}, 프로그램: ${it.programs}" 
+}
+
+val prompt = """
+[DB에서 검색된 유사 학교]
+${schoolContexts.joinToString("\n")}
+
+위 정보를 참고하여 학생에게 맞는 학교를 추천하세요.
+...
+"""
+```
+
+#### Phase 3: 리뷰 기반 설명 (Level 3 완료 후)
+
+학교 리뷰 문서에서 추출한 장단점을 프롬프트에 포함하여, 더 신뢰도 높은 추천 근거를 제시합니다.
+
+---
+
+## 데이터 품질 모니터링
+
+### 일일 배치 작업
+
+다음 지표를 자동으로 모니터링하고 목표 미달 시 Slack 알림:
+
+| 지표 | 목표 | 측정 방법 |
+|------|------|----------|
+| 학교 수 | 최소 30개, 권장 50개 | `SELECT COUNT(*) FROM schools` |
+| 임베딩 커버리지 | 80% 이상 | `school_embeddings` 테이블 카운트 / 학교 수 |
+| description NULL 비율 | 20% 미만 | NULL 카운트 / 전체 학교 수 |
+| 평균 embedding_text 길이 | 250자 이상 | AVG(LENGTH(embedding_text)) |
+| 학교 유형 다양성 | 2종 이상 (각 5개 이상) | GROUP BY type |
+
+### 실패 사이트 추적 및 재시도 전략
+
+크롤링 실패 사이트를 추적하고 체계적으로 재시도:
+
+- **SSL 오류** → 3개월 후 재시도
+- **404 오류** → 6개월 후 재시도
+- **Rate Limit** → 1주일 후 재시도
+
+---
+
+## 기대 효과 요약
+
+### 정량적 효과
+
+| 지표 | 현재 | Level 1 완료 후 | Level 2 완료 후 | Level 3 완료 후 |
+|------|------|----------------|----------------|----------------|
+| Fallback 발생률 | ~70% | ~40% | ~20% | ~10% |
+| 벡터 검색 정확도 | 기준 | +30% | +50% | +70% |
+| 설명 품질 (주관적) | 기준 | +20% | +70% | +90% |
+| 평균 embedding_text 길이 | 150자 | 300자 | 400자 | 500자 |
+| 학교당 문서 수 | 1개 | 1개 | 4개 (프로그램 문서) | 9개 (리뷰 포함) |
+
+### 정성적 효과
+
+- **사용자 신뢰도 향상**: 구체적 데이터 기반 추천으로 신뢰성 증가
+- **경쟁력 강화**: 타 유학 상담 서비스 대비 정보 품질 우위 확보
+- **재방문율 증가**: 만족스러운 추천으로 인한 고객 충성도 향상
+- **시스템 자가 개선**: 피드백 루프를 통한 지속적 품질 개선
+
+---
+
+## 위험 요소 및 대응 방안
+
+### 기술적 위험
+
+| 위험 | 영향도 | 대응 방안 |
+|------|--------|----------|
+| 외부 사이트 크롤링 차단 (robots.txt, Rate Limit) | 높음 | API 우선 활용, Rate Limiting 준수, User-Agent 설정 |
+| College Scorecard API 장애 | 중간 | 캐싱, Fallback 데이터 소스 준비 |
+| 벡터 검색 품질 개선 미달 | 중간 | 임베딩 전략 재검토, 하이브리드 검색 (키워드 + 벡터) |
+| Gemini API 비용 증가 | 중간 | 캐싱 강화, 배치 처리, 프롬프트 최적화 |
+
+### 운영 위험
+
+| 위험 | 영향도 | 대응 방안 |
+|------|--------|----------|
+| 크롤링 작업 시간 증가 | 중간 | 병렬 처리, 우선순위 기반 선택적 크롤링 |
+| 데이터 품질 저하 (파싱 오류) | 높음 | TDD 기반 개발, 자동화된 품질 검증 |
+| 운영 DB 부하 | 낮음 | 배치 작업 시간 분산, 읽기 전용 레플리카 활용 |
+
+---
+
+## 결론
+
+본 계획은 **3단계 점진적 개선 전략**과 **TDD 기반 개발**, **자가 개선 루프**를 통해 AI 유학 상담 시스템의 품질을 체계적으로 향상시킵니다.
+
+**핵심 원칙**:
+1. **점진적 개선**: Level 1 → 2 → 3 순서로 안정적 확장
+2. **품질 우선**: TDD 방식으로 테스트 커버리지 80% 이상 유지
+3. **데이터 기반**: 사용자 피드백을 반영한 우선순위 결정
+4. **지속 가능성**: 자가 개선 루프로 장기적 품질 향상
+
+**기대 성과**:
+- Fallback 발생률 70% → 10%로 감소
+- 매칭 결과 설명 품질 90% 향상
+- 사용자 만족도 및 재방문율 증가
+- 서비스 경쟁력 강화
+
+이 계획을 통해 우리의 AI 유학 상담 시스템은 **단순한 추천**에서 **신뢰할 수 있는 전문가 수준의 상담**으로 진화할 것입니다.
+
+---
+
+**문서 버전 히스토리**:
+- v1.0 (2026-02-11): 초안 작성 (3단계 고도화 전략, TDD 적용, 자가 개선 루프)

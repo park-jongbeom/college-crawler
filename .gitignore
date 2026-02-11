@@ -90,9 +90,9 @@ Thumbs.db
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Documentation
-docs/plan/
-docs/reference/
+# Documentation - 보고서 외 모든 문서 제외
+docs/*
+!docs/AI_ENHANCEMENT_PLAN_2026.md
 
 # Cursor
 .cursor/projects/**/agent-transcripts/
