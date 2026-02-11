@@ -34,6 +34,9 @@ class BaseCrawler:
         self.session.headers.update({
             'User-Agent': config.USER_AGENT
         })
+        self.ssl_error_detected: bool = False
+        self.ssl_error_message: str = ""
+        self.ssl_error_url: str = ""
         self.robots_parser: Optional[RobotFileParser] = None
         self._init_robots_parser()
         
@@ -108,6 +111,15 @@ class BaseCrawler:
             logger.error(f"HTTP 오류: {url} - {e}")
             if e.response.status_code in [429, 503]:  # Rate limit or Service unavailable
                 return self._retry_fetch(url, retry, delay=10)
+            return None
+
+        except requests.exceptions.SSLError as e:
+            # SSL 검증 오류는 재시도해도 동일하게 실패하는 경우가 대부분이라 즉시 중단
+            self.ssl_error_detected = True
+            self.ssl_error_message = str(e)
+            self.ssl_error_url = url
+            logger.error(f"SSL 검증 실패: {url} - {e}")
+            logger.warning(f"SSL 인증서 문제로 요청 중단: {url}")
             return None
             
         except requests.exceptions.RequestException as e:

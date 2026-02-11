@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.crawlers.school_crawler import SchoolCrawler
+from src.utils.failed_sites import failed_site_manager
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -30,7 +31,7 @@ def load_schools_list(json_file: Path) -> list:
     return data.get('schools', [])
 
 
-def crawl_single_school(name: str, website: str, output_dir: Path) -> None:
+def crawl_single_school(name: str, website: str, output_dir: Path) -> dict:
     """
     단일 학교 크롤링
     
@@ -43,10 +44,26 @@ def crawl_single_school(name: str, website: str, output_dir: Path) -> None:
     logger.info(f"크롤링 시작: {name}")
     logger.info(f"{'='*60}\n")
     
+    result = {
+        "success": False,
+        "ssl_error_detected": False,
+        "ssl_error_message": "",
+        "ssl_error_url": "",
+    }
+
     try:
         with SchoolCrawler(name, website) as crawler:
             data = crawler.crawl_all()
+            result["ssl_error_detected"] = crawler.ssl_error_detected
+            result["ssl_error_message"] = crawler.ssl_error_message
+            result["ssl_error_url"] = crawler.ssl_error_url
+
+            if crawler.ssl_error_detected:
+                logger.warning(f"SSL 검증 실패로 저장을 건너뜀: {name}")
+                return result
+
             crawler.save_to_json(output_dir)
+            result["success"] = True
             
             # 요약 출력
             crawled = data.get('crawled_data', {})
@@ -58,6 +75,7 @@ def crawl_single_school(name: str, website: str, output_dir: Path) -> None:
             
     except Exception as e:
         logger.error(f"❌ 크롤링 실패: {e}")
+    return result
 
 
 def crawl_all_schools(json_file: Path, output_dir: Path, limit: int = None) -> None:
@@ -87,12 +105,30 @@ def crawl_all_schools(json_file: Path, output_dir: Path, limit: int = None) -> N
             logger.warning(f"⏭️  건너뜀: 정보 부족 - {school}")
             fail_count += 1
             continue
+
+        should_skip, skip_reason = failed_site_manager.should_skip(website)
+        if should_skip:
+            logger.warning(f"⏭️  건너뜀: {name} - {skip_reason}")
+            fail_count += 1
+            continue
         
         logger.info(f"\n[{i}/{len(schools)}] {name}")
         
         try:
-            crawl_single_school(name, website, output_dir)
-            success_count += 1
+            result = crawl_single_school(name, website, output_dir)
+            if result.get("ssl_error_detected", False):
+                failed_site_manager.add_ssl_failure(
+                    name=name,
+                    website=website,
+                    error_message=result.get("ssl_error_message", "SSL verification failed"),
+                    note=f"마지막 실패 URL: {result.get('ssl_error_url', website)}",
+                )
+                logger.warning(f"⏭️  SSL 실패 사이트로 기록: {name}")
+                fail_count += 1
+            elif result.get("success", False):
+                success_count += 1
+            else:
+                fail_count += 1
         except Exception as e:
             logger.error(f"❌ 실패: {e}")
             fail_count += 1

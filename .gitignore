@@ -74,6 +74,7 @@ data/*.db
 *.json
 !**/sample*.json
 !**/example*.json
+!data/failed_sites.json
 
 # Database
 *.db

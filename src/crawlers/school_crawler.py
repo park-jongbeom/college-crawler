@@ -71,6 +71,9 @@ class SchoolCrawler(BaseCrawler):
         logger.info(f"메인 페이지 크롤링: {self.base_url}")
         
         response = self.fetch(self.base_url)
+        if self.ssl_error_detected:
+            logger.warning("SSL 검증 오류로 현재 학교 크롤링을 중단합니다.")
+            return
         if not response:
             logger.warning("메인 페이지 응답 없음")
             return
@@ -96,10 +99,16 @@ class SchoolCrawler(BaseCrawler):
         ]
         
         for pattern in patterns:
+            if self.ssl_error_detected:
+                logger.warning("SSL 검증 오류로 International 페이지 탐색을 중단합니다.")
+                break
             url = self.get_absolute_url(pattern)
             logger.info(f"International 페이지 시도: {url}")
             
             response = self.fetch(url)
+            if self.ssl_error_detected:
+                logger.warning("SSL 검증 오류로 International 페이지 탐색을 중단합니다.")
+                break
             if response and response.status_code == 200:
                 html = response.text
                 
@@ -132,10 +141,16 @@ class SchoolCrawler(BaseCrawler):
         ]
         
         for pattern in patterns:
+            if self.ssl_error_detected:
+                logger.warning("SSL 검증 오류로 Programs 페이지 탐색을 중단합니다.")
+                break
             url = self.get_absolute_url(pattern)
             logger.info(f"Programs 페이지 시도: {url}")
             
             response = self.fetch(url)
+            if self.ssl_error_detected:
+                logger.warning("SSL 검증 오류로 Programs 페이지 탐색을 중단합니다.")
+                break
             if response and response.status_code == 200:
                 html = response.text
                 
@@ -165,10 +180,16 @@ class SchoolCrawler(BaseCrawler):
         ]
         
         for pattern in patterns:
+            if self.ssl_error_detected:
+                logger.warning("SSL 검증 오류로 Campus Life 페이지 탐색을 중단합니다.")
+                break
             url = self.get_absolute_url(pattern)
             logger.info(f"Campus Life 페이지 시도: {url}")
             
             response = self.fetch(url)
+            if self.ssl_error_detected:
+                logger.warning("SSL 검증 오류로 Campus Life 페이지 탐색을 중단합니다.")
+                break
             if response and response.status_code == 200:
                 html = response.text
                 
