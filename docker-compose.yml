@@ -5,7 +5,6 @@ services:
   college-crawler:
     image: patrick5471/college-crawler:latest
     container_name: college-crawler
-    user: "0:0"  # root로 실행하여 볼륨 권한 문제 해결
     env_file:
       - .env
     environment:
@@ -30,7 +29,6 @@ services:
   monitor:
     image: patrick5471/college-crawler:latest
     container_name: college-crawler-monitor
-    user: "0:0"  # root로 실행하여 볼륨 권한 문제 해결
     env_file:
       - .env
     environment:
