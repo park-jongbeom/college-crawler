@@ -57,6 +57,16 @@ def _extract_crawl_status(new_value: Optional[Dict[str, Any]]) -> tuple[str, str
 
     return "unknown", str(message) or "상태 해석 불가"
 
+
+def _failed_sites_by_website() -> Dict[str, Dict[str, Any]]:
+    """SSL 실패 사이트 목록을 website 키 맵으로 반환합니다."""
+    failed_sites = failed_site_manager.get_failed_sites("ssl_verification_failed")
+    return {
+        str(item.get("website")): item
+        for item in failed_sites
+        if item.get("website")
+    }
+
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
@@ -356,6 +366,7 @@ async def get_recent_schools(limit: int = 10) -> List[Dict[str, Any]]:
     """
     try:
         with get_db() as db:
+            failed_sites_map = _failed_sites_by_website()
             schools = db.query(School).order_by(
                 School.updated_at.desc()
             ).limit(limit).all()
@@ -376,7 +387,11 @@ async def get_recent_schools(limit: int = 10) -> List[Dict[str, Any]]:
                         latest_logs_by_school[log.record_id] = log
 
             return [
-                _build_recent_school_item(school, latest_logs_by_school.get(school.id))
+                _build_recent_school_item(
+                    school,
+                    latest_logs_by_school.get(school.id),
+                    failed_sites_map.get(school.website or ""),
+                )
                 for school in schools
             ]
 
@@ -388,10 +403,24 @@ async def get_recent_schools(limit: int = 10) -> List[Dict[str, Any]]:
 def _build_recent_school_item(
     school: School,
     latest_log: Optional[AuditLog],
+    failed_site: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     crawl_status, crawl_message = _extract_crawl_status(
         latest_log.new_value if latest_log else None
     )
+    crawl_updated_at = (
+        latest_log.created_at.isoformat() if latest_log and latest_log.created_at else None
+    )
+    if failed_site:
+        crawl_status = "failed"
+        crawl_message = str(failed_site.get("error_message") or "SSL 검증 실패")
+        crawl_updated_at = str(
+            failed_site.get("last_checked_at") or failed_site.get("first_failed_at")
+        )
+    elif crawl_status == "unknown":
+        crawl_status = "success"
+        crawl_message = "최근 DB 업데이트 기준"
+
     return {
                     "id": str(school.id),
                     "name": school.name,
@@ -406,9 +435,7 @@ def _build_recent_school_item(
                     ),
                     "crawl_status": crawl_status,
                     "crawl_message": crawl_message,
-                    "crawl_updated_at": latest_log.created_at.isoformat()
-                    if latest_log and latest_log.created_at
-                    else None,
+                    "crawl_updated_at": crawl_updated_at,
                 }
 
 
@@ -425,6 +452,7 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
             school = db.query(School).filter(School.id == school_uuid).first()
             if not school:
                 raise HTTPException(status_code=404, detail="학교를 찾을 수 없습니다")
+            failed_site = _failed_sites_by_website().get(school.website or "")
 
             crawl_logs = (
                 db.query(AuditLog)
@@ -437,6 +465,42 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                 .limit(10)
                 .all()
             )
+
+            crawl_history = [
+                {
+                    "id": str(log.id),
+                    "timestamp": log.created_at.isoformat() if log.created_at else None,
+                    "status": _extract_crawl_status(log.new_value)[0],
+                    "message": _extract_crawl_status(log.new_value)[1],
+                    "raw": log.new_value if isinstance(log.new_value, dict) else {},
+                }
+                for log in crawl_logs
+            ]
+            if failed_site:
+                crawl_history.insert(
+                    0,
+                    {
+                        "id": "failed-site",
+                        "timestamp": failed_site.get("last_checked_at")
+                        or failed_site.get("first_failed_at"),
+                        "status": "failed",
+                        "message": failed_site.get("error_message")
+                        or "SSL 검증 실패",
+                        "raw": failed_site,
+                    },
+                )
+            if not crawl_history:
+                crawl_history.append(
+                    {
+                        "id": "db-updated",
+                        "timestamp": school.updated_at.isoformat()
+                        if school.updated_at
+                        else None,
+                        "status": "success",
+                        "message": "최근 DB 업데이트 기준",
+                        "raw": {},
+                    }
+                )
 
             return {
                 "school": {
@@ -459,16 +523,7 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                     "graduation_rate": school.graduation_rate,
                     "updated_at": school.updated_at.isoformat() if school.updated_at else None,
                 },
-                "crawl_history": [
-                    {
-                        "id": str(log.id),
-                        "timestamp": log.created_at.isoformat() if log.created_at else None,
-                        "status": _extract_crawl_status(log.new_value)[0],
-                        "message": _extract_crawl_status(log.new_value)[1],
-                        "raw": log.new_value if isinstance(log.new_value, dict) else {},
-                    }
-                    for log in crawl_logs
-                ],
+                "crawl_history": crawl_history,
             }
     except HTTPException:
         raise

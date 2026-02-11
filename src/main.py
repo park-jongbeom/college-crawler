@@ -19,6 +19,7 @@ from src.utils.failed_sites import failed_site_manager
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 def load_schools_list(json_file: Path) -> list:
@@ -117,6 +118,9 @@ def _record_crawl_audit(
                     action="CRAWL",
                     new_value=new_value,
                     ip_address="crawler-system",
+                    user_id=SYSTEM_ACTOR_ID,
+                    created_by=SYSTEM_ACTOR_ID,
+                    updated_by=SYSTEM_ACTOR_ID,
                 )
             )
     except Exception as e:
