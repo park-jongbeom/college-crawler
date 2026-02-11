@@ -116,6 +116,7 @@ def _record_crawl_audit(
                     record_id=resolved_school_id,
                     action="CRAWL",
                     new_value=new_value,
+                    ip_address="crawler-system",
                 )
             )
     except Exception as e:
