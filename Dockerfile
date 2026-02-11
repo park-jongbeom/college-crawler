@@ -35,6 +35,9 @@ COPY --from=builder /root/.local /home/crawler/.local
 # Copy application code
 COPY --chown=crawler:crawler . .
 
+# Create logs directory with proper permissions
+RUN mkdir -p /app/logs && chown -R crawler:crawler /app/logs
+
 # Add local bin to PATH
 ENV PATH=/home/crawler/.local/bin:$PATH
 ENV PYTHONUNBUFFERED=1
