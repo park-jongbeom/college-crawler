@@ -84,6 +84,16 @@ def _crawl_auditlog_filter():
         ),
     )
 
+
+def _school_crawl_columns_available(db) -> bool:
+    """배포 직후 마이그레이션 누락 시에도 API가 죽지 않도록 가드합니다."""
+    try:
+        # 컬럼이 없으면 DB에서 UndefinedColumn 계열 예외가 발생합니다.
+        db.query(School.last_crawled_at).limit(1).all()
+        return True
+    except Exception:
+        return False
+
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
@@ -222,13 +232,27 @@ async def get_database_status() -> Dict[str, Any]:
             
             # 최근 업데이트된 학교 (24시간 이내)
             yesterday = datetime.now() - timedelta(days=1)
-            # 하이브리드 설계: schools.last_crawled_at을 "최근 업데이트"의 1차 소스로 사용
-            recently_updated = (
-                db.query(School.id)
-                .filter(School.last_crawled_at != None)  # noqa: E711
-                .filter(School.last_crawled_at >= yesterday)
-                .count()
-            )
+            if _school_crawl_columns_available(db):
+                # 하이브리드 설계: schools.last_crawled_at을 "최근 업데이트"의 1차 소스로 사용
+                recently_updated = (
+                    db.query(School.id)
+                    .filter(School.last_crawled_at != None)  # noqa: E711
+                    .filter(School.last_crawled_at >= yesterday)
+                    .count()
+                )
+            else:
+                # 폴백: 마이그레이션 적용 전에는 audit_logs 기반으로 계산
+                recently_updated = (
+                    db.query(School.id)
+                    .join(AuditLog, AuditLog.record_id == School.id)
+                    .filter(
+                        AuditLog.table_name == "schools",
+                        _crawl_auditlog_filter(),
+                        AuditLog.created_at >= yesterday,
+                    )
+                    .distinct()
+                    .count()
+                )
             
             return {
                 "connected": True,
@@ -263,33 +287,96 @@ async def get_crawling_stats() -> Dict[str, Any]:
     try:
         with get_db() as db:
             total_schools = db.query(School).count()
-            # 하이브리드 설계: schools.last_crawl_* 컬럼을 통계의 1차 소스로 사용
-            attempted = db.query(School).filter(School.last_crawled_at != None).count()  # noqa: E711
-            success = (
-                db.query(School)
-                .filter(School.last_crawl_status == "success")
-                .count()
-            )
-            failed = (
-                db.query(School)
-                .filter(School.last_crawl_status == "failed")
-                .count()
-            )
-            skipped = (
-                db.query(School)
-                .filter(School.last_crawl_status == "skipped")
-                .count()
-            )
+            if _school_crawl_columns_available(db):
+                # 하이브리드 설계: schools.last_crawl_* 컬럼을 통계의 1차 소스로 사용
+                attempted = db.query(School).filter(School.last_crawled_at != None).count()  # noqa: E711
+                success = (
+                    db.query(School)
+                    .filter(School.last_crawl_status == "success")
+                    .count()
+                )
+                failed = (
+                    db.query(School)
+                    .filter(School.last_crawl_status == "failed")
+                    .count()
+                )
+                skipped = (
+                    db.query(School)
+                    .filter(School.last_crawl_status == "skipped")
+                    .count()
+                )
 
-            yesterday = datetime.now() - timedelta(days=1)
-            recently_updated = (
-                db.query(School.id)
-                .filter(School.last_crawled_at != None)  # noqa: E711
-                .filter(School.last_crawled_at >= yesterday)
-                .count()
-            )
+                yesterday = datetime.now() - timedelta(days=1)
+                recently_updated = (
+                    db.query(School.id)
+                    .filter(School.last_crawled_at != None)  # noqa: E711
+                    .filter(School.last_crawled_at >= yesterday)
+                    .count()
+                )
 
-            last_crawl_at = db.query(func.max(School.last_crawled_at)).scalar()
+                last_crawl_at = db.query(func.max(School.last_crawled_at)).scalar()
+            else:
+                # 폴백: 마이그레이션 적용 전에는 audit_logs 기반으로 계산
+                success = 0
+                failed = 0
+                skipped = 0
+
+                latest_per_school = (
+                    db.query(
+                        AuditLog.record_id.label("school_id"),
+                        func.max(AuditLog.created_at).label("last_crawl_at"),
+                    )
+                    .filter(
+                        AuditLog.table_name == "schools",
+                        _crawl_auditlog_filter(),
+                    )
+                    .group_by(AuditLog.record_id)
+                    .subquery()
+                )
+
+                latest_logs = (
+                    db.query(AuditLog.record_id, AuditLog.new_value)
+                    .join(
+                        latest_per_school,
+                        (AuditLog.record_id == latest_per_school.c.school_id)
+                        & (AuditLog.created_at == latest_per_school.c.last_crawl_at),
+                    )
+                    .all()
+                )
+                attempted = len(latest_logs)
+
+                for _school_id, new_value in latest_logs:
+                    status, _message = _extract_crawl_status(new_value)
+                    if status == "success":
+                        success += 1
+                    elif status == "failed":
+                        failed += 1
+                    elif status == "skipped":
+                        skipped += 1
+
+                yesterday = datetime.now() - timedelta(days=1)
+                recently_updated = (
+                    db.query(School.id)
+                    .join(AuditLog, AuditLog.record_id == School.id)
+                    .filter(
+                        AuditLog.table_name == "schools",
+                        _crawl_auditlog_filter(),
+                        AuditLog.created_at >= yesterday,
+                    )
+                    .distinct()
+                    .count()
+                )
+
+                latest_crawl_log = (
+                    db.query(AuditLog)
+                    .filter(
+                        AuditLog.table_name == "schools",
+                        _crawl_auditlog_filter(),
+                    )
+                    .order_by(AuditLog.created_at.desc())
+                    .first()
+                )
+                last_crawl_at = latest_crawl_log.created_at if latest_crawl_log else None
 
             return {
                 "total": total_schools,
@@ -436,8 +523,32 @@ async def get_recent_schools(
     try:
         with get_db() as db:
             failed_sites_map = _failed_sites_by_website()
-            # 하이브리드 설계: 최근 업데이트(정렬)는 schools.last_crawled_at을 우선 사용
-            base = db.query(School)
+            use_school_cols = _school_crawl_columns_available(db)
+            if use_school_cols:
+                # 하이브리드 설계: 최근 업데이트(정렬)는 schools.last_crawled_at을 우선 사용
+                base = db.query(School)
+                latest_crawl_at_subq = None
+            else:
+                # 폴백: 마이그레이션 적용 전에는 audit_logs 기반 정렬/상태를 사용
+                latest_crawl_at_subq = (
+                    db.query(
+                        AuditLog.record_id.label("school_id"),
+                        func.max(AuditLog.created_at).label("last_crawl_at"),
+                    )
+                    .filter(
+                        AuditLog.table_name == "schools",
+                        _crawl_auditlog_filter(),
+                    )
+                    .group_by(AuditLog.record_id)
+                    .subquery()
+                )
+                base = (
+                    db.query(School)
+                    .outerjoin(
+                        latest_crawl_at_subq,
+                        latest_crawl_at_subq.c.school_id == School.id,
+                    )
+                )
             if state and state.strip():
                 base = base.filter(School.state == state.strip())
             if school_type and school_type.strip():
@@ -449,22 +560,58 @@ async def get_recent_schools(
             total_pages = (total + per_page - 1) // per_page if total > 0 else 0
             offset = (page - 1) * per_page
 
-            schools = (
-                base.order_by(
-                    School.last_crawled_at.desc().nullslast(),
-                    School.updated_at.desc().nullslast(),
+            if use_school_cols:
+                schools = (
+                    base.order_by(
+                        School.last_crawled_at.desc().nullslast(),
+                        School.updated_at.desc().nullslast(),
+                    )
+                    .offset(offset)
+                    .limit(per_page)
+                    .all()
                 )
-                .offset(offset)
-                .limit(per_page)
-                .all()
-            )
-            items = [
-                _build_recent_school_item(
-                    school,
-                    failed_sites_map.get(school.website or ""),
+                items = [
+                    _build_recent_school_item(
+                        school,
+                        None,
+                        failed_sites_map.get(school.website or ""),
+                    )
+                    for school in schools
+                ]
+            else:
+                schools = (
+                    base.order_by(
+                        latest_crawl_at_subq.c.last_crawl_at.desc().nullslast(),
+                        School.updated_at.desc().nullslast(),
+                    )
+                    .offset(offset)
+                    .limit(per_page)
+                    .all()
                 )
-                for school in schools
-            ]
+                school_ids = [school.id for school in schools]
+                latest_logs_by_school: Dict[uuid.UUID, AuditLog] = {}
+                if school_ids:
+                    crawl_logs = (
+                        db.query(AuditLog)
+                        .filter(
+                            _crawl_auditlog_filter(),
+                            AuditLog.record_id.in_(school_ids),
+                        )
+                        .order_by(AuditLog.created_at.desc())
+                        .all()
+                    )
+                    for log in crawl_logs:
+                        if log.record_id not in latest_logs_by_school:
+                            latest_logs_by_school[log.record_id] = log
+
+                items = [
+                    _build_recent_school_item(
+                        school,
+                        latest_logs_by_school.get(school.id),
+                        failed_sites_map.get(school.website or ""),
+                    )
+                    for school in schools
+                ]
 
             return {
                 "items": items,
@@ -481,11 +628,18 @@ async def get_recent_schools(
 
 def _build_recent_school_item(
     school: School,
+    latest_log: Optional[AuditLog] = None,
     failed_site: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    crawl_status = (school.last_crawl_status or "unknown").lower()
-    crawl_message = school.last_crawl_message or ""
-    crawl_updated_at = school.last_crawled_at.isoformat() if school.last_crawled_at else None
+    if latest_log is not None:
+        crawl_status, crawl_message = _extract_crawl_status(latest_log.new_value)
+        crawl_updated_at = (
+            latest_log.created_at.isoformat() if latest_log.created_at else None
+        )
+    else:
+        crawl_status = (school.last_crawl_status or "unknown").lower()
+        crawl_message = school.last_crawl_message or ""
+        crawl_updated_at = school.last_crawled_at.isoformat() if school.last_crawled_at else None
     if failed_site:
         crawl_status = "failed"
         crawl_message = str(failed_site.get("error_message") or "SSL 검증 실패")
