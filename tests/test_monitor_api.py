@@ -178,6 +178,8 @@ class TestDatabaseStatus:
         assert data["connected"] is True
         assert "total_schools" in data
         assert "schools_with_email" in data
+        assert "schools_with_employment_rate" in data
+        assert "schools_with_facilities" in data
         assert "completion_rate" in data
     
     @patch('src.monitor.api.test_connection')
@@ -285,6 +287,48 @@ class TestSchoolsEndpoint:
             assert "name" in school
             assert "state" in school
             assert "international_email" in school
+
+    @patch('src.monitor.api.get_db')
+    @patch('src.monitor.api._failed_sites_by_website')
+    def test_school_detail_includes_extended_fields(self, mock_failed_sites, mock_get_db, client):
+        """학교 상세 응답에 확장 컬럼이 포함되는지 테스트"""
+        mock_failed_sites.return_value = {}
+
+        mock_school = MagicMock()
+        mock_school.id = "123e4567-e89b-12d3-a456-426614174000"
+        mock_school.name = "Test College"
+        mock_school.type = "community_college"
+        mock_school.state = "CA"
+        mock_school.city = "Los Angeles"
+        mock_school.website = "https://test.edu"
+        mock_school.description = "설명"
+        mock_school.international_email = "test@college.edu"
+        mock_school.international_phone = "(123) 456-7890"
+        mock_school.employment_rate = 87.5
+        mock_school.esl_program = {"available": True}
+        mock_school.international_support = {"available": True}
+        mock_school.facilities = {"library": True}
+        mock_school.staff_info = {"international_staff_count": 2}
+        mock_school.tuition = 10000
+        mock_school.living_cost = 1200
+        mock_school.acceptance_rate = 70
+        mock_school.transfer_rate = 45
+        mock_school.graduation_rate = 55
+        mock_school.updated_at = datetime.now()
+
+        mock_db = MagicMock()
+        mock_get_db.return_value.__enter__.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_school
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+
+        response = client.get("/api/schools/123e4567-e89b-12d3-a456-426614174000")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "school" in data
+        assert data["school"]["employment_rate"] == 87.5
+        assert data["school"]["facilities"] == {"library": True}
+        assert data["school"]["staff_info"] == {"international_staff_count": 2}
 
 
 class TestStatusEndpoint:

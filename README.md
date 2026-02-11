@@ -171,7 +171,7 @@ GitHub Actions를 통한 자동 배포가 구성되어 있습니다.
 docker compose up -d
 
 # 브라우저에서 접속
-http://서버IP:8080
+http://서버IP:8081
 ```
 
 **주요 기능:**
@@ -270,3 +270,4 @@ Copyright (c) 2026 Go Almond
 
 - [개발 정책](docs/00_DEVELOPMENT_POLICY.md)
 - [데이터베이스 스키마](docs/DATABASE_SCHEMA.md)
+- [GA API Platform DB 스키마 원문](../ga-api-platform/docs/DATABASE_SCHEMA.md)

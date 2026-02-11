@@ -192,6 +192,16 @@ async def get_database_status() -> Dict[str, Any]:
             schools_with_esl = db.query(School).filter(
                 School.esl_program != None
             ).count()
+
+            # 취업률 데이터가 있는 학교
+            schools_with_employment_rate = db.query(School).filter(
+                School.employment_rate != None
+            ).count()
+
+            # 시설 정보가 있는 학교
+            schools_with_facilities = db.query(School).filter(
+                School.facilities != None
+            ).count()
             
             # 최근 업데이트된 학교 (24시간 이내)
             yesterday = datetime.now() - timedelta(days=1)
@@ -205,6 +215,8 @@ async def get_database_status() -> Dict[str, Any]:
                 "schools_with_email": schools_with_email,
                 "schools_with_phone": schools_with_phone,
                 "schools_with_esl": schools_with_esl,
+                "schools_with_employment_rate": schools_with_employment_rate,
+                "schools_with_facilities": schools_with_facilities,
                 "recently_updated": recently_updated,
                 "completion_rate": round((schools_with_email / total_schools * 100), 1) if total_schools > 0 else 0
             }
@@ -523,9 +535,11 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                     "description": school.description,
                     "international_email": school.international_email,
                     "international_phone": school.international_phone,
+                    "employment_rate": float(school.employment_rate) if school.employment_rate is not None else None,
                     "esl_program": school.esl_program,
                     "international_support": school.international_support,
                     "facilities": school.facilities,
+                    "staff_info": school.staff_info,
                     "tuition": school.tuition,
                     "living_cost": school.living_cost,
                     "acceptance_rate": school.acceptance_rate,
