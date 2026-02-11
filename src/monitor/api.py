@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 
 # 프로젝트 루트를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -67,6 +67,22 @@ def _failed_sites_by_website() -> Dict[str, Dict[str, Any]]:
         for item in failed_sites
         if item.get("website")
     }
+
+
+def _crawl_auditlog_filter():
+    """
+    운영 DB 제약/히스토리 차이로 인해 크롤링 이력이 action=CRAWL 또는 action=UPDATE로 기록될 수 있습니다.
+
+    - 신규 포맷: action=UPDATE + new_value.event_type='crawl'
+    - 구 포맷: action=CRAWL
+    """
+    return or_(
+        AuditLog.action == "CRAWL",
+        and_(
+            AuditLog.action == "UPDATE",
+            AuditLog.new_value["event_type"].astext == "crawl",
+        ),
+    )
 
 # CORS 설정
 app.add_middleware(
@@ -212,7 +228,7 @@ async def get_database_status() -> Dict[str, Any]:
                 .join(AuditLog, AuditLog.record_id == School.id)
                 .filter(
                     AuditLog.table_name == "schools",
-                    AuditLog.action == "CRAWL",
+                    _crawl_auditlog_filter(),
                     AuditLog.created_at >= yesterday,
                 )
                 .distinct()
@@ -262,7 +278,7 @@ async def get_crawling_stats() -> Dict[str, Any]:
                 )
                 .filter(
                     AuditLog.table_name == "schools",
-                    AuditLog.action == "CRAWL",
+                    _crawl_auditlog_filter(),
                 )
                 .group_by(AuditLog.record_id)
                 .subquery()
@@ -293,7 +309,7 @@ async def get_crawling_stats() -> Dict[str, Any]:
                 .join(AuditLog, AuditLog.record_id == School.id)
                 .filter(
                     AuditLog.table_name == "schools",
-                    AuditLog.action == "CRAWL",
+                    _crawl_auditlog_filter(),
                     AuditLog.created_at >= yesterday,
                 )
                 .distinct()
@@ -304,7 +320,7 @@ async def get_crawling_stats() -> Dict[str, Any]:
                 db.query(AuditLog)
                 .filter(
                     AuditLog.table_name == "schools",
-                    AuditLog.action == "CRAWL",
+                    _crawl_auditlog_filter(),
                 )
                 .order_by(AuditLog.created_at.desc())
                 .first()
@@ -461,7 +477,7 @@ async def get_recent_schools(
                 )
                 .filter(
                     AuditLog.table_name == "schools",
-                    AuditLog.action == "CRAWL",
+                    _crawl_auditlog_filter(),
                 )
                 .group_by(AuditLog.record_id)
                 .subquery()
@@ -502,7 +518,7 @@ async def get_recent_schools(
                 crawl_logs = (
                     db.query(AuditLog)
                     .filter(
-                        AuditLog.action == "CRAWL",
+                        _crawl_auditlog_filter(),
                         AuditLog.record_id.in_(school_ids),
                     )
                     .order_by(AuditLog.created_at.desc())
@@ -593,7 +609,7 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                 .filter(
                     AuditLog.table_name == "schools",
                     AuditLog.record_id == school_uuid,
-                    AuditLog.action == "CRAWL",
+                    _crawl_auditlog_filter(),
                 )
                 .order_by(AuditLog.created_at.desc())
                 .limit(10)
@@ -725,7 +741,7 @@ async def get_failed_site_detail(website: str) -> Dict[str, Any]:
                 crawl_logs = (
                     db.query(AuditLog)
                     .filter(
-                        AuditLog.action == "CRAWL",
+                        _crawl_auditlog_filter(),
                         AuditLog.record_id == school.id,
                     )
                     .order_by(AuditLog.created_at.desc())

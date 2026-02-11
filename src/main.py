@@ -100,6 +100,9 @@ def _record_crawl_audit(
                 resolved_school_id = school.id if school else uuid.uuid4()
 
             new_value: Dict[str, Any] = {
+                # 운영 DB의 audit_logs.action 체크 제약이 CRAWL을 허용하지 않는 경우가 있어,
+                # 크롤링 이벤트를 new_value로 식별 가능하게 태깅합니다.
+                "event_type": "crawl",
                 "status": status,
                 "school_name": name,
                 "website": website,
@@ -115,7 +118,9 @@ def _record_crawl_audit(
                 AuditLog(
                     table_name="schools",
                     record_id=resolved_school_id,
-                    action="CRAWL",
+                    # NOTE: 운영 DB 제약 호환을 위해 UPDATE로 저장합니다.
+                    # 모니터는 (action=UPDATE && new_value.event_type=crawl) 또는 (action=CRAWL)을 모두 인식합니다.
+                    action="UPDATE",
                     new_value=new_value,
                     ip_address="crawler-system",
                     user_id=SYSTEM_ACTOR_ID,
