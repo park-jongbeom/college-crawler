@@ -224,6 +224,76 @@
                 </div>
             </div>
 
+            <!-- Failed Sites -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h2 class="text-xl font-semibold text-gray-900">실패한 사이트 (SSL 검증 오류)</h2>
+                    <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium"
+                          x-text="'총 ' + failedSites.length + '개'">
+                    </span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    학교명
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    웹사이트
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    에러 메시지
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    최초 실패
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    재시도 횟수
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="site in failedSites" :key="site.website">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900" x-text="site.name"></div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <a :href="site.website" target="_blank" rel="noopener noreferrer"
+                                           class="text-sm text-blue-600 hover:text-blue-800 break-all">
+                                            <span x-text="site.website"></span>
+                                        </a>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="text-xs text-gray-600 max-w-md truncate"
+                                             :title="site.error_message"
+                                             x-text="site.error_message">
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm text-gray-500" x-text="formatDate(site.first_failed_at)"></div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                                        <span class="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-medium"
+                                              x-text="(site.retry_count || 0) + '회'">
+                                        </span>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="failedSites.length === 0">
+                                <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
+                                    실패한 사이트가 없습니다.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-6 py-3 bg-gray-50 text-xs text-gray-600">
+                    SSL 검증 실패 사이트는 다음 크롤링에서 자동으로 건너뜁니다.
+                </div>
+            </div>
+
             <!-- Recent Logs -->
             <div class="bg-white rounded-lg shadow">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -263,6 +333,7 @@
             return {
                 status: {},
                 recentSchools: [],
+                failedSites: [],
                 logs: [],
                 loading: true,
                 lastUpdate: '로딩 중...',
@@ -273,11 +344,13 @@
                     await this.fetchData();
                     await this.fetchLogs();
                     await this.fetchRecentSchools();
+                    await this.fetchFailedSites();
                     
                     // 자동 새로고침 (30초마다)
                     this.refreshInterval = setInterval(() => {
                         if (this.autoRefresh) {
                             this.fetchData();
+                            this.fetchFailedSites();
                         }
                     }, 30000);
                 },
@@ -310,6 +383,17 @@
                         this.logs = data.logs || [];
                     } catch (error) {
                         console.error('로그 로딩 실패:', error);
+                    }
+                },
+
+                async fetchFailedSites() {
+                    try {
+                        const response = await fetch('./api/failed-sites');
+                        const data = await response.json();
+                        this.failedSites = data.ssl_failures || [];
+                    } catch (error) {
+                        console.error('실패 사이트 로딩 실패:', error);
+                        this.failedSites = [];
                     }
                 },
 

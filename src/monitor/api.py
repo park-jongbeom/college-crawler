@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.database.connection import get_db, test_connection
 from src.database.repository import SchoolRepository
 from src.database.models import School, AuditLog
+from src.utils.failed_sites import failed_site_manager
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -364,6 +365,30 @@ async def health_check() -> Dict[str, str]:
         "status": "healthy",
         "timestamp": datetime.now().isoformat()
     }
+
+
+@app.get("/api/failed-sites")
+async def get_failed_sites() -> Dict[str, Any]:
+    """
+    실패 사이트 목록 조회
+
+    Returns:
+        SSL 검증 실패 사이트 목록 및 집계 정보
+    """
+    try:
+        ssl_failures = failed_site_manager.get_failed_sites("ssl_verification_failed")
+        return {
+            "ssl_failures": ssl_failures,
+            "total_ssl_failures": len(ssl_failures),
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"실패 사이트 조회 실패: {e}")
+        return {
+            "ssl_failures": [],
+            "total_ssl_failures": 0,
+            "error": str(e),
+        }
 
 
 async def generate_events():
