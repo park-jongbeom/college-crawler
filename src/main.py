@@ -102,9 +102,13 @@ def _record_crawl_audit(
                 "status": status,
                 "school_name": name,
                 "website": website,
+                "message": "크롤링 완료" if status == "success" else "크롤링 실패",
             }
             if extra:
                 new_value.update(extra)
+            # 과거 포맷 호환: error_message만 있는 경우 message로 보정
+            if not new_value.get("message") and new_value.get("error_message"):
+                new_value["message"] = new_value["error_message"]
 
             db.add(
                 AuditLog(
@@ -267,6 +271,7 @@ def crawl_all_schools(json_file: Path, limit: int = None) -> None:
                 name=name,
                 website=website,
                 extra={
+                    "message": f"건너뜀: {skip_reason}",
                     "error_type": "skip_failed_site",
                     "error_message": skip_reason,
                 },
@@ -293,6 +298,7 @@ def crawl_all_schools(json_file: Path, limit: int = None) -> None:
                     website=website,
                     school_id=uuid.UUID(school_id) if school_id else None,
                     extra={
+                        "message": "SSL 검증 실패로 크롤링 중단",
                         "error_type": "ssl_verification",
                         "error_message": result.get("ssl_error_message", ""),
                     },
@@ -308,6 +314,7 @@ def crawl_all_schools(json_file: Path, limit: int = None) -> None:
                     website=website,
                     school_id=uuid.UUID(school_id) if school_id else None,
                     extra={
+                        "message": "크롤링 처리 실패",
                         "error_type": "crawl_failed",
                         "error_message": "크롤링 처리 실패",
                     },
@@ -320,6 +327,7 @@ def crawl_all_schools(json_file: Path, limit: int = None) -> None:
                 name=name,
                 website=website,
                 extra={
+                    "message": "예외 발생으로 크롤링 실패",
                     "error_type": "exception",
                     "error_message": str(e),
                 },

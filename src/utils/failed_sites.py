@@ -13,7 +13,7 @@ from typing import Any
 class FailedSiteManager:
     """실패한 사이트를 파일로 기록하고 스킵 여부를 판단합니다."""
 
-    def __init__(self, file_path: str = "data/failed_sites.json") -> None:
+    def __init__(self, file_path: str = "data/crawled/failed_sites.json") -> None:
         self.file_path = Path(__file__).parent.parent.parent / file_path
         self._ensure_file_exists()
 

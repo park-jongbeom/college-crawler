@@ -189,16 +189,27 @@
                                     연락처
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    크롤링 상태
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     업데이트
                                 </th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             <template x-for="school in recentSchools" :key="school.id">
-                                <tr class="hover:bg-gray-50">
+                                <tr class="hover:bg-gray-50 cursor-pointer" @click="openSchoolDetail(school.id)">
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="font-medium text-gray-900" x-text="school.name"></div>
-                                        <div class="text-sm text-gray-500" x-text="school.website"></div>
+                                        <div class="text-sm text-gray-500">
+                                            <a :href="school.website"
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               class="hover:underline"
+                                               @click.stop>
+                                                <span x-text="school.website"></span>
+                                            </a>
+                                        </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                         <span x-text="school.city + ', ' + school.state"></span>
@@ -212,6 +223,18 @@
                                         </div>
                                         <div x-show="!school.international_email && !school.international_phone" class="text-gray-400">
                                             정보 없음
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        <span class="px-2 py-1 rounded text-xs font-medium"
+                                              :class="statusBadgeClass(school.crawl_status)"
+                                              :title="school.crawl_message || ''"
+                                              x-text="statusLabel(school.crawl_status)">
+                                        </span>
+                                        <div class="text-xs text-gray-500 mt-1 max-w-xs truncate"
+                                             x-show="school.crawl_message"
+                                             :title="school.crawl_message"
+                                             x-text="school.crawl_message">
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -320,6 +343,78 @@
         </div>
     </main>
 
+    <!-- School Detail Modal -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+        <div class="w-full max-w-4xl max-h-[85vh] overflow-y-auto bg-white rounded-lg shadow-xl">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-start justify-between">
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-900" x-text="selectedSchool?.name || '학교 상세 정보'"></h3>
+                    <p class="text-sm text-gray-500 mt-1" x-text="selectedSchool?.website || '-'"></p>
+                </div>
+                <button @click="closeSchoolDetail()"
+                        class="text-gray-500 hover:text-gray-700 text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 transition">
+                    닫기
+                </button>
+            </div>
+
+            <div class="p-6 space-y-6">
+                <div x-show="detailLoading" class="text-sm text-gray-600">상세 데이터 로딩 중...</div>
+                <div x-show="detailError" class="text-sm text-red-600" x-text="detailError"></div>
+
+                <div x-show="selectedSchool && !detailLoading" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div class="bg-gray-50 rounded p-4">
+                        <h4 class="font-semibold text-gray-900 mb-2">기본 정보</h4>
+                        <p><span class="text-gray-500">타입:</span> <span x-text="selectedSchool?.type || '-'"></span></p>
+                        <p><span class="text-gray-500">위치:</span> <span x-text="(selectedSchool?.city || '-') + ', ' + (selectedSchool?.state || '-')"></span></p>
+                        <p><span class="text-gray-500">업데이트:</span> <span x-text="formatDate(selectedSchool?.updated_at)"></span></p>
+                    </div>
+                    <div class="bg-gray-50 rounded p-4">
+                        <h4 class="font-semibold text-gray-900 mb-2">연락처</h4>
+                        <p><span class="text-gray-500">이메일:</span> <span x-text="selectedSchool?.international_email || '-'"></span></p>
+                        <p><span class="text-gray-500">전화:</span> <span x-text="selectedSchool?.international_phone || '-'"></span></p>
+                    </div>
+                </div>
+
+                <div x-show="selectedSchool && !detailLoading" class="space-y-3">
+                    <h4 class="font-semibold text-gray-900">수집 데이터</h4>
+                    <div class="bg-gray-50 rounded p-4 text-sm">
+                        <p class="text-gray-600 mb-2">ESL 프로그램</p>
+                        <pre class="whitespace-pre-wrap break-words text-xs text-gray-800" x-text="formatDetailValue(selectedSchool?.esl_program)"></pre>
+                    </div>
+                    <div class="bg-gray-50 rounded p-4 text-sm">
+                        <p class="text-gray-600 mb-2">유학생 지원</p>
+                        <pre class="whitespace-pre-wrap break-words text-xs text-gray-800" x-text="formatDetailValue(selectedSchool?.international_support)"></pre>
+                    </div>
+                    <div class="bg-gray-50 rounded p-4 text-sm">
+                        <p class="text-gray-600 mb-2">시설 정보</p>
+                        <pre class="whitespace-pre-wrap break-words text-xs text-gray-800" x-text="formatDetailValue(selectedSchool?.facilities)"></pre>
+                    </div>
+                </div>
+
+                <div x-show="!detailLoading">
+                    <h4 class="font-semibold text-gray-900 mb-3">최근 크롤링 이력</h4>
+                    <div class="space-y-2">
+                        <template x-for="log in crawlHistory" :key="log.id">
+                            <div class="border rounded p-3 text-sm">
+                                <div class="flex items-center justify-between">
+                                    <span class="px-2 py-1 rounded text-xs font-medium"
+                                          :class="statusBadgeClass(log.status)"
+                                          x-text="statusLabel(log.status)">
+                                    </span>
+                                    <span class="text-gray-500" x-text="formatDate(log.timestamp)"></span>
+                                </div>
+                                <p class="mt-2 text-gray-700" x-text="log.message || '-'"></p>
+                            </div>
+                        </template>
+                        <div x-show="crawlHistory.length === 0" class="text-sm text-gray-500">
+                            크롤링 이력이 없습니다.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="mt-12 pb-8 text-center text-sm text-gray-500">
         <p>College Crawler Monitor v1.0.0 | 
@@ -339,6 +434,11 @@
                 lastUpdate: '로딩 중...',
                 autoRefresh: true,
                 refreshInterval: null,
+                showModal: false,
+                selectedSchool: null,
+                crawlHistory: [],
+                detailLoading: false,
+                detailError: '',
 
                 async init() {
                     await this.fetchData();
@@ -397,6 +497,61 @@
                         console.error('실패 사이트 로딩 실패:', error);
                         this.failedSites = [];
                     }
+                },
+
+                async openSchoolDetail(schoolId) {
+                    this.showModal = true;
+                    this.detailLoading = true;
+                    this.detailError = '';
+                    this.selectedSchool = null;
+                    this.crawlHistory = [];
+                    try {
+                        const response = await fetch(`./api/schools/${schoolId}`);
+                        if (!response.ok) {
+                            throw new Error(`상세 API 호출 실패 (${response.status})`);
+                        }
+                        const data = await response.json();
+                        this.selectedSchool = data.school || null;
+                        this.crawlHistory = data.crawl_history || [];
+                    } catch (error) {
+                        console.error('학교 상세 정보 로딩 실패:', error);
+                        this.detailError = '학교 상세 정보를 불러오지 못했습니다.';
+                    } finally {
+                        this.detailLoading = false;
+                    }
+                },
+
+                closeSchoolDetail() {
+                    this.showModal = false;
+                    this.detailError = '';
+                },
+
+                statusLabel(status) {
+                    if (status === 'success') return '성공';
+                    if (status === 'failed') return '실패';
+                    if (status === 'skipped') return '건너뜀';
+                    return '미확인';
+                },
+
+                statusBadgeClass(status) {
+                    if (status === 'success') return 'bg-green-100 text-green-800';
+                    if (status === 'failed') return 'bg-red-100 text-red-800';
+                    if (status === 'skipped') return 'bg-gray-100 text-gray-800';
+                    return 'bg-yellow-100 text-yellow-800';
+                },
+
+                formatDetailValue(value) {
+                    if (value === null || value === undefined || value === '') {
+                        return '-';
+                    }
+                    if (typeof value === 'object') {
+                        try {
+                            return JSON.stringify(value, null, 2);
+                        } catch (error) {
+                            return String(value);
+                        }
+                    }
+                    return String(value);
                 },
 
                 formatDate(dateString) {

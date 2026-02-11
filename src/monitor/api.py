@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 import json
+import uuid
 import docker
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +31,31 @@ app = FastAPI(
     description="실시간 크롤러 모니터링 대시보드",
     version="1.0.0"
 )
+
+
+def _extract_crawl_status(new_value: Optional[Dict[str, Any]]) -> tuple[str, str]:
+    """AuditLog new_value에서 상태/메시지를 표준화합니다."""
+    if not isinstance(new_value, dict):
+        return "unknown", "크롤링 상태 정보 없음"
+
+    status = str(new_value.get("status", "unknown")).lower()
+    message = (
+        new_value.get("message")
+        or new_value.get("error_message")
+        or new_value.get("note")
+        or ""
+    )
+
+    if status in ("success", "failed", "skipped"):
+        return status, str(message)
+
+    error_type = str(new_value.get("error_type", "")).lower()
+    if "skip" in error_type:
+        return "skipped", str(message) or "실패 이력으로 건너뜀"
+    if error_type:
+        return "failed", str(message) or "크롤링 실패"
+
+    return "unknown", str(message) or "상태 해석 불가"
 
 # CORS 설정
 app.add_middleware(
@@ -333,9 +359,40 @@ async def get_recent_schools(limit: int = 10) -> List[Dict[str, Any]]:
             schools = db.query(School).order_by(
                 School.updated_at.desc()
             ).limit(limit).all()
-            
+            school_ids = [school.id for school in schools]
+            latest_logs_by_school: Dict[uuid.UUID, AuditLog] = {}
+            if school_ids:
+                crawl_logs = (
+                    db.query(AuditLog)
+                    .filter(
+                        AuditLog.action == "CRAWL",
+                        AuditLog.record_id.in_(school_ids),
+                    )
+                    .order_by(AuditLog.created_at.desc())
+                    .all()
+                )
+                for log in crawl_logs:
+                    if log.record_id not in latest_logs_by_school:
+                        latest_logs_by_school[log.record_id] = log
+
             return [
-                {
+                _build_recent_school_item(school, latest_logs_by_school.get(school.id))
+                for school in schools
+            ]
+
+    except Exception as e:
+        logger.error(f"학교 목록 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _build_recent_school_item(
+    school: School,
+    latest_log: Optional[AuditLog],
+) -> Dict[str, Any]:
+    crawl_status, crawl_message = _extract_crawl_status(
+        latest_log.new_value if latest_log else None
+    )
+    return {
                     "id": str(school.id),
                     "name": school.name,
                     "state": school.state,
@@ -343,13 +400,80 @@ async def get_recent_schools(limit: int = 10) -> List[Dict[str, Any]]:
                     "international_email": school.international_email,
                     "international_phone": school.international_phone,
                     "website": school.website,
-                    "updated_at": school.updated_at.isoformat() if school.updated_at else None
+                    "updated_at": school.updated_at.isoformat() if school.updated_at else None,
+                    "has_contact_info": bool(
+                        school.international_email or school.international_phone
+                    ),
+                    "crawl_status": crawl_status,
+                    "crawl_message": crawl_message,
+                    "crawl_updated_at": latest_log.created_at.isoformat()
+                    if latest_log and latest_log.created_at
+                    else None,
                 }
-                for school in schools
-            ]
-            
+
+
+@app.get("/api/schools/{school_id}")
+async def get_school_detail(school_id: str) -> Dict[str, Any]:
+    """학교 상세 정보 및 최근 크롤링 이력을 조회합니다."""
+    try:
+        school_uuid = uuid.UUID(school_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="유효하지 않은 school_id 입니다") from e
+
+    try:
+        with get_db() as db:
+            school = db.query(School).filter(School.id == school_uuid).first()
+            if not school:
+                raise HTTPException(status_code=404, detail="학교를 찾을 수 없습니다")
+
+            crawl_logs = (
+                db.query(AuditLog)
+                .filter(
+                    AuditLog.table_name == "schools",
+                    AuditLog.record_id == school_uuid,
+                    AuditLog.action == "CRAWL",
+                )
+                .order_by(AuditLog.created_at.desc())
+                .limit(10)
+                .all()
+            )
+
+            return {
+                "school": {
+                    "id": str(school.id),
+                    "name": school.name,
+                    "type": school.type,
+                    "state": school.state,
+                    "city": school.city,
+                    "website": school.website,
+                    "description": school.description,
+                    "international_email": school.international_email,
+                    "international_phone": school.international_phone,
+                    "esl_program": school.esl_program,
+                    "international_support": school.international_support,
+                    "facilities": school.facilities,
+                    "tuition": school.tuition,
+                    "living_cost": school.living_cost,
+                    "acceptance_rate": school.acceptance_rate,
+                    "transfer_rate": school.transfer_rate,
+                    "graduation_rate": school.graduation_rate,
+                    "updated_at": school.updated_at.isoformat() if school.updated_at else None,
+                },
+                "crawl_history": [
+                    {
+                        "id": str(log.id),
+                        "timestamp": log.created_at.isoformat() if log.created_at else None,
+                        "status": _extract_crawl_status(log.new_value)[0],
+                        "message": _extract_crawl_status(log.new_value)[1],
+                        "raw": log.new_value if isinstance(log.new_value, dict) else {},
+                    }
+                    for log in crawl_logs
+                ],
+            }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"학교 목록 조회 실패: {e}")
+        logger.error(f"학교 상세 조회 실패: {school_id} - {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
