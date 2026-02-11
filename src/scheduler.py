@@ -121,7 +121,10 @@ def main() -> None:
         misfire_grace_time=60 * 60,  # 1시간
     )
 
-    next_run = scheduler.get_job("daily_crawl").next_run_time
+    # APScheduler 버전에 따라 Job.next_run_time 속성이 없을 수 있어,
+    # trigger로 다음 실행 시각을 직접 계산합니다.
+    now = datetime.now(tz)
+    next_run = trigger.get_next_fire_time(previous_fire_time=None, now=now)
     logger.info("스케줄러 시작")
     logger.info(f"- timezone={timezone}")
     logger.info(f"- daily_time={hour:02d}:{minute:02d}")
