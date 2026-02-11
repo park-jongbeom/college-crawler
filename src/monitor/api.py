@@ -259,6 +259,23 @@ async def get_database_status() -> Dict[str, Any]:
             schools_with_facilities = db.query(School).filter(
                 School.facilities != None
             ).count()
+
+            # Scorecard Level 1 필드
+            schools_with_graduation_rate = db.query(School).filter(
+                School.graduation_rate != None
+            ).count()
+
+            schools_with_average_salary = db.query(School).filter(
+                School.average_salary != None
+            ).count()
+
+            # Scorecard 데이터 커버리지 (하나라도 있는 경우)
+            schools_with_any_scorecard = db.query(School).filter(
+                or_(
+                    School.graduation_rate != None,
+                    School.average_salary != None
+                )
+            ).count()
             
             # 최근 업데이트된 학교 (24시간 이내)
             yesterday = datetime.now() - timedelta(days=1)
@@ -292,10 +309,14 @@ async def get_database_status() -> Dict[str, Any]:
                 "schools_with_esl": schools_with_esl,
                 "schools_with_employment_rate": schools_with_employment_rate,
                 "schools_with_facilities": schools_with_facilities,
+                "schools_with_graduation_rate": schools_with_graduation_rate,
+                "schools_with_average_salary": schools_with_average_salary,
+                "schools_with_any_scorecard": schools_with_any_scorecard,
                 "recently_updated": recently_updated,
                 # NOTE: 이 값은 "크롤링 성공률"이 아니라 "연락처(이메일) 채움률"입니다.
                 "completion_rate": round((schools_with_email / total_schools * 100), 1) if total_schools > 0 else 0,
                 "contact_completion_rate": round((schools_with_email / total_schools * 100), 1) if total_schools > 0 else 0,
+                "scorecard_coverage_rate": round((schools_with_any_scorecard / total_schools * 100), 1) if total_schools > 0 else 0,
             }
             
     except Exception as e:
@@ -471,6 +492,54 @@ async def get_crawling_stats() -> Dict[str, Any]:
             "recently_updated": 0,
             "last_crawl": None,
         }
+
+
+@app.get("/api/scorecard/stats")
+async def get_scorecard_stats() -> Dict[str, Any]:
+    """
+    College Scorecard Level 1 데이터 수집 현황 조회
+    
+    Returns:
+        Scorecard 메타데이터 커버리지 통계
+    """
+    try:
+        with get_db() as db:
+            total_schools = db.query(School).count()
+            
+            # Level 1 필드별 커버리지
+            with_graduation_rate = db.query(School).filter(
+                School.graduation_rate != None
+            ).count()
+            
+            with_average_salary = db.query(School).filter(
+                School.average_salary != None
+            ).count()
+            
+            # 하나라도 Scorecard 데이터가 있는 학교
+            with_any_scorecard_data = db.query(School).filter(
+                or_(
+                    School.graduation_rate != None,
+                    School.average_salary != None
+                )
+            ).count()
+            
+            return {
+                "total_schools": total_schools,
+                "scorecard_enriched": {
+                    "with_graduation_rate": with_graduation_rate,
+                    "with_average_salary": with_average_salary,
+                    "with_any_data": with_any_scorecard_data,
+                },
+                "coverage_rates": {
+                    "graduation_rate": round((with_graduation_rate / total_schools * 100), 1) if total_schools > 0 else 0,
+                    "average_salary": round((with_average_salary / total_schools * 100), 1) if total_schools > 0 else 0,
+                    "overall": round((with_any_scorecard_data / total_schools * 100), 1) if total_schools > 0 else 0,
+                },
+                "timestamp": datetime.now().isoformat(),
+            }
+    except Exception as e:
+        logger.error(f"Scorecard 통계 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/resources")

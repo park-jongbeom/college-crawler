@@ -186,6 +186,86 @@
                 </div>
             </div>
 
+            <!-- Scorecard Data Section -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-900">📊 College Scorecard Level 1 데이터 수집 현황</h2>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Graduation Rate -->
+                        <div class="border rounded-lg p-4">
+                            <p class="text-sm text-gray-600 mb-2">졸업률 (Graduation Rate)</p>
+                            <p class="text-3xl font-bold text-blue-600" 
+                               x-text="status.database?.schools_with_graduation_rate || 0">
+                            </p>
+                            <p class="text-xs text-gray-500 mt-2">
+                                <span class="font-semibold"
+                                      x-text="status.database && status.database.total_schools ? 
+                                          ((status.database.schools_with_graduation_rate / status.database.total_schools * 100) || 0).toFixed(1) + '%' : 
+                                          '0%'">
+                                </span>
+                                커버리지
+                            </p>
+                            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                <div class="bg-blue-600 h-2 rounded-full transition-all"
+                                     :style="status.database && status.database.total_schools ? 
+                                         'width: ' + ((status.database.schools_with_graduation_rate / status.database.total_schools * 100) || 0) + '%' : 
+                                         'width: 0%'">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Average Salary -->
+                        <div class="border rounded-lg p-4">
+                            <p class="text-sm text-gray-600 mb-2">평균 연봉 (Average Salary)</p>
+                            <p class="text-3xl font-bold text-green-600" 
+                               x-text="status.database?.schools_with_average_salary || 0">
+                            </p>
+                            <p class="text-xs text-gray-500 mt-2">
+                                <span class="font-semibold"
+                                      x-text="status.database && status.database.total_schools ? 
+                                          ((status.database.schools_with_average_salary / status.database.total_schools * 100) || 0).toFixed(1) + '%' : 
+                                          '0%'">
+                                </span>
+                                커버리지
+                            </p>
+                            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                <div class="bg-green-600 h-2 rounded-full transition-all"
+                                     :style="status.database && status.database.total_schools ? 
+                                         'width: ' + ((status.database.schools_with_average_salary / status.database.total_schools * 100) || 0) + '%' : 
+                                         'width: 0%'">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Overall Scorecard Coverage -->
+                        <div class="border rounded-lg p-4">
+                            <p class="text-sm text-gray-600 mb-2">전체 Scorecard 커버리지</p>
+                            <p class="text-3xl font-bold text-purple-600" 
+                               x-text="status.database?.scorecard_coverage_rate ? 
+                                   status.database.scorecard_coverage_rate.toFixed(1) + '%' : 
+                                   '0%'">
+                            </p>
+                            <p class="text-xs text-gray-500 mt-2">
+                                정량 메타데이터 보강
+                            </p>
+                            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                <div class="bg-purple-600 h-2 rounded-full transition-all"
+                                     :style="'width: ' + (status.database?.scorecard_coverage_rate || 0) + '%'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-center text-xs text-gray-500">
+                        <span>하나 이상의 Scorecard 데이터가 있는 학교: </span>
+                        <span class="font-semibold" x-text="status.database?.schools_with_any_scorecard || 0"></span>
+                        <span> / </span>
+                        <span x-text="status.database?.total_schools || 0"></span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Recent Schools -->
             <div class="bg-white rounded-lg shadow">
                 <div class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -540,6 +620,40 @@
                         <h4 class="font-semibold text-gray-900 mb-2">연락처</h4>
                         <p><span class="text-gray-500">이메일:</span> <span x-text="selectedSchool?.international_email || '-'"></span></p>
                         <p><span class="text-gray-500">전화:</span> <span x-text="selectedSchool?.international_phone || '-'"></span></p>
+                    </div>
+                </div>
+
+                <!-- Scorecard Data Badge -->
+                <div x-show="selectedSchool && !detailLoading && (selectedSchool?.graduation_rate || selectedSchool?.average_salary)" 
+                     class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 class="font-semibold text-blue-900 mb-3">
+                        📊 Scorecard Level 1 데이터
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div x-show="selectedSchool?.graduation_rate" class="bg-white rounded p-3">
+                            <p class="text-gray-600 mb-1">졸업률</p>
+                            <p class="text-2xl font-bold text-blue-600">
+                                <span x-text="selectedSchool?.graduation_rate"></span>%
+                            </p>
+                        </div>
+                        <div x-show="selectedSchool?.average_salary" class="bg-white rounded p-3">
+                            <p class="text-gray-600 mb-1">평균 연봉</p>
+                            <p class="text-2xl font-bold text-green-600">
+                                $<span x-text="selectedSchool?.average_salary ? selectedSchool.average_salary.toLocaleString() : '-'"></span>
+                            </p>
+                        </div>
+                        <div x-show="selectedSchool?.acceptance_rate" class="bg-white rounded p-3">
+                            <p class="text-gray-600 mb-1">입학률</p>
+                            <p class="text-2xl font-bold text-purple-600">
+                                <span x-text="selectedSchool?.acceptance_rate"></span>%
+                            </p>
+                        </div>
+                        <div x-show="selectedSchool?.employment_rate" class="bg-white rounded p-3">
+                            <p class="text-gray-600 mb-1">취업률</p>
+                            <p class="text-2xl font-bold text-orange-600">
+                                <span x-text="selectedSchool?.employment_rate"></span>%
+                            </p>
+                        </div>
                     </div>
                 </div>
 
