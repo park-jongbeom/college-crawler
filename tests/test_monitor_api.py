@@ -164,12 +164,14 @@ class TestDatabaseStatus:
         mock_get_db.return_value.__enter__.return_value = mock_db
         
         # Query Mock
+        # - repo.count() 및 db.query(School).count() 계열
+        # - db.query(School).filter(...).count() 계열
+        # - db.query(School.id).join(AuditLog,...).filter(...).distinct().count() (최근 크롤링 기준 recently_updated)
         mock_query = MagicMock()
         mock_query.count.return_value = 60
-        mock_db.query.return_value = mock_query
-        
-        # Filter Mock
         mock_query.filter.return_value.count.return_value = 25
+        mock_query.join.return_value.filter.return_value.distinct.return_value.count.return_value = 12
+        mock_db.query.return_value = mock_query
         
         response = client.get("/api/database")
         assert response.status_code == 200
@@ -271,14 +273,31 @@ class TestSchoolsEndpoint:
         mock_db = MagicMock()
         mock_get_db.return_value.__enter__.return_value = mock_db
         
-        # Query Mock (페이징/필터: filter→order_by→offset→limit→all, count)
+        # Query Mock
+        # - 1) 최신 크롤링 시각 서브쿼리 생성: db.query(AuditLog.record_id, max(created_at))...
+        # - 2) 학교 목록 조회: db.query(School).outerjoin(...).filter...order_by...offset...limit...all
+        mock_subquery_builder = MagicMock()
+        mock_subquery_builder.filter.return_value = mock_subquery_builder
+        mock_subquery_builder.group_by.return_value = mock_subquery_builder
+        mock_subquery_builder.subquery.return_value = MagicMock()
+
         mock_base = MagicMock()
+        mock_base.outerjoin.return_value = mock_base
         mock_base.filter.return_value = mock_base
         mock_base.order_by.return_value = mock_base
         mock_base.offset.return_value = mock_base
         mock_base.limit.return_value.all.return_value = [mock_school]
         mock_base.count.return_value = 1
-        mock_db.query.return_value = mock_base
+
+        def query_side_effect(*args, **kwargs):
+            # args는 모델/컬럼 지정이 다양할 수 있어, 호출 순서 기반으로 처리
+            # 첫 호출: 서브쿼리 빌더, 이후 호출: base(School)
+            if not hasattr(query_side_effect, "called"):
+                query_side_effect.called = True
+                return mock_subquery_builder
+            return mock_base
+
+        mock_db.query.side_effect = query_side_effect
 
         response = client.get("/api/schools/recent?page=1&per_page=20")
         assert response.status_code == 200
@@ -378,19 +397,27 @@ class TestCrawlingStats:
     """크롤링 통계 엔드포인트 테스트"""
     
     @patch('src.monitor.api.get_db')
-    def test_crawling_stats_endpoint(self, mock_get_db, client):
+    @patch('src.monitor.api._failed_sites_by_website')
+    def test_crawling_stats_endpoint(self, mock_failed_sites, mock_get_db, client):
         """크롤링 통계 조회 테스트"""
+        mock_failed_sites.return_value = {}
+
         # Mock DB
         mock_db = MagicMock()
         mock_get_db.return_value.__enter__.return_value = mock_db
         
         # Mock Query
+        # - total_schools: db.query(School).count()
+        # - recently_updated: db.query(School.id).join(...).filter(...).distinct().count()
+        # - latest_crawl_log: db.query(AuditLog).filter(...).order_by(...).first()
         mock_log = MagicMock()
         mock_log.new_value = {"status": "success"}
         mock_log.created_at = datetime.now()
         
         mock_query = MagicMock()
-        mock_query.filter.return_value.all.return_value = [mock_log] * 10
+        mock_query.count.return_value = 60
+        mock_query.join.return_value.filter.return_value.distinct.return_value.count.return_value = 10
+        mock_query.filter.return_value.order_by.return_value.first.return_value = mock_log
         mock_db.query.return_value = mock_query
         
         response = client.get("/api/crawling/stats")

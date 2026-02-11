@@ -257,7 +257,7 @@
                             </div>
 
                             <div class="mt-2 text-xs text-gray-500">
-                                업데이트: <span x-text="formatDate(school.updated_at)"></span>
+                                크롤링 업데이트: <span x-text="formatDate(school.crawl_updated_at || school.updated_at)"></span>
                             </div>
                         </div>
                     </template>
@@ -284,7 +284,7 @@
                                     크롤링 상태
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    업데이트
+                                    크롤링 업데이트
                                 </th>
                             </tr>
                         </thead>
@@ -330,7 +330,7 @@
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <span x-text="formatDate(school.updated_at)"></span>
+                                        <span x-text="formatDate(school.crawl_updated_at || school.updated_at)"></span>
                                     </td>
                                 </tr>
                             </template>

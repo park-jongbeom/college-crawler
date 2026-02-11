@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
+from sqlalchemy import func
 
 # 프로젝트 루트를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -205,9 +206,18 @@ async def get_database_status() -> Dict[str, Any]:
             
             # 최근 업데이트된 학교 (24시간 이내)
             yesterday = datetime.now() - timedelta(days=1)
-            recently_updated = db.query(School).filter(
-                School.updated_at >= yesterday
-            ).count()
+            # "최근 업데이트"를 DB updated_at이 아닌 "최근 크롤링 시각" 기준으로 계산
+            recently_updated = (
+                db.query(School.id)
+                .join(AuditLog, AuditLog.record_id == School.id)
+                .filter(
+                    AuditLog.table_name == "schools",
+                    AuditLog.action == "CRAWL",
+                    AuditLog.created_at >= yesterday,
+                )
+                .distinct()
+                .count()
+            )
             
             return {
                 "connected": True,
@@ -246,9 +256,18 @@ async def get_crawling_stats() -> Dict[str, Any]:
 
             # 최근 업데이트된 학교 수 (24시간)
             yesterday = datetime.now() - timedelta(days=1)
-            recently_updated = db.query(School).filter(
-                School.updated_at >= yesterday
-            ).count()
+            # "최근 업데이트"를 DB updated_at이 아닌 "최근 크롤링 시각" 기준으로 계산
+            recently_updated = (
+                db.query(School.id)
+                .join(AuditLog, AuditLog.record_id == School.id)
+                .filter(
+                    AuditLog.table_name == "schools",
+                    AuditLog.action == "CRAWL",
+                    AuditLog.created_at >= yesterday,
+                )
+                .distinct()
+                .count()
+            )
 
             latest_crawl_log = (
                 db.query(AuditLog)
@@ -398,7 +417,29 @@ async def get_recent_schools(
         with get_db() as db:
             failed_sites_map = _failed_sites_by_website()
 
-            base = db.query(School)
+            # 최근 업데이트 기준을 "School.updated_at"이 아닌 "최근 크롤링(AuditLog.created_at)"으로 변경.
+            # - AuditLog는 record_id = schools.id 로 저장됨
+            # - 학교별 최신 CRAWL 시각을 서브쿼리로 만들어 정렬/페이징에 사용
+            latest_crawl_at_subq = (
+                db.query(
+                    AuditLog.record_id.label("school_id"),
+                    func.max(AuditLog.created_at).label("last_crawl_at"),
+                )
+                .filter(
+                    AuditLog.table_name == "schools",
+                    AuditLog.action == "CRAWL",
+                )
+                .group_by(AuditLog.record_id)
+                .subquery()
+            )
+
+            base = (
+                db.query(School)
+                .outerjoin(
+                    latest_crawl_at_subq,
+                    latest_crawl_at_subq.c.school_id == School.id,
+                )
+            )
             if state and state.strip():
                 base = base.filter(School.state == state.strip())
             if school_type and school_type.strip():
@@ -411,7 +452,12 @@ async def get_recent_schools(
             offset = (page - 1) * per_page
 
             schools = (
-                base.order_by(School.updated_at.desc())
+                base.order_by(
+                    # 최신 크롤링 시각 기준 내림차순, 크롤 이력 없는 학교는 뒤로
+                    latest_crawl_at_subq.c.last_crawl_at.desc().nullslast(),
+                    # 타이브레이커 (동일 시각/NULL일 때는 DB updated_at로 정렬)
+                    School.updated_at.desc().nullslast(),
+                )
                 .offset(offset)
                 .limit(per_page)
                 .all()
@@ -472,8 +518,8 @@ def _build_recent_school_item(
             failed_site.get("last_checked_at") or failed_site.get("first_failed_at")
         )
     elif crawl_status == "unknown":
-        crawl_status = "success"
-        crawl_message = "최근 DB 업데이트 기준"
+        # 크롤링 이력이 없는 학교. 최근 업데이트 기준이 "크롤링 시각"이므로 unknown 유지.
+        crawl_message = "크롤링 이력 없음"
 
     return {
                     "id": str(school.id),
