@@ -187,7 +187,18 @@ class CollegeScorecardClient:
         graduation_rate = completion_4yr if completion_4yr is not None else completion_2yr
 
         # 자료의 버전/코호트에 따라 earnings 필드가 비어있을 수 있으므로 방어적으로 처리합니다.
-        salary = StatisticsParser.parse_money_to_int(earnings.get("6_yrs_after_entry"))
+        # NOTE: earnings는 중첩 구조인 경우가 많습니다.
+        # 예: latest.earnings.6_yrs_after_entry.median, latest.earnings.10_yrs_after_entry.median
+        earnings_6yr = earnings.get("6_yrs_after_entry") or {}
+        earnings_10yr = earnings.get("10_yrs_after_entry") or {}
+        salary_6yr = StatisticsParser.parse_money_to_int(
+            earnings_6yr.get("median") if isinstance(earnings_6yr, dict) else earnings_6yr
+        )
+        salary_10yr = StatisticsParser.parse_money_to_int(
+            earnings_10yr.get("median") if isinstance(earnings_10yr, dict) else earnings_10yr
+        )
+        # 10년차가 더 안정적인 지표인 경우가 많아 우선 사용합니다.
+        salary = salary_10yr if salary_10yr is not None else salary_6yr
 
         scorecard_id = item.get("id")
         try:

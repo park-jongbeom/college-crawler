@@ -23,7 +23,10 @@ def test_fetch_school_stats_selects_best_match_and_normalizes(monkeypatch):
                 "latest": {
                     "admissions": {"admission_rate": {"overall": 0.12}},
                     "completion": {"completion_rate_4yr_150nt": 0.55},
-                    "earnings": {"6_yrs_after_entry": 52000},
+                    "earnings": {
+                        "6_yrs_after_entry": {"median": 52000},
+                        "10_yrs_after_entry": {"median": 65000},
+                    },
                 },
             },
             {
@@ -32,7 +35,10 @@ def test_fetch_school_stats_selects_best_match_and_normalizes(monkeypatch):
                 "latest": {
                     "admissions": {"admission_rate": {"overall": 0.5}},
                     "completion": {"completion_rate_4yr_150nt": 0.6},
-                    "earnings": {"6_yrs_after_entry": 61000},
+                    "earnings": {
+                        "6_yrs_after_entry": {"median": 61000},
+                        "10_yrs_after_entry": {"median": 71000},
+                    },
                 },
             },
         ],
@@ -50,7 +56,8 @@ def test_fetch_school_stats_selects_best_match_and_normalizes(monkeypatch):
     assert stats.scorecard_id == 999
     assert stats.acceptance_rate_percent == 50
     assert stats.graduation_rate_percent == 60
-    assert stats.average_salary_usd == 61000
+    # 10년차 median을 우선 사용
+    assert stats.average_salary_usd == 71000
 
 
 @pytest.mark.unit
