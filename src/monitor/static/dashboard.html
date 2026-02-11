@@ -21,15 +21,15 @@
     <!-- Header -->
     <header class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center space-x-3">
                     <span class="text-3xl">🕷️</span>
                     <h1 class="text-2xl font-bold text-gray-900">College Crawler Monitor</h1>
                 </div>
-                <div class="flex items-center space-x-4">
+                <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
                     <span class="text-sm text-gray-500" x-text="lastUpdate"></span>
                     <button @click="fetchData()" 
-                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                            class="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
                         🔄 새로고침
                     </button>
                 </div>
@@ -177,35 +177,97 @@
 
             <!-- Recent Schools -->
             <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+                <div class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <h2 class="text-xl font-semibold text-gray-900">🎓 최근 업데이트된 학교</h2>
-                    <div class="flex flex-wrap items-center gap-3">
-                        <label class="text-sm text-gray-600">주</label>
-                        <select x-model="recentSchoolsState" @change="recentSchoolsPage=1; fetchRecentSchools(1)"
-                                class="rounded border border-gray-300 px-2 py-1.5 text-sm">
-                            <option value="">전체</option>
-                            <option value="CA">캘리포니아 (CA)</option>
-                            <option value="TX">텍사스 (TX)</option>
-                        </select>
-                        <label class="text-sm text-gray-600 ml-2">학교 타입</label>
-                        <select x-model="recentSchoolsType" @change="recentSchoolsPage=1; fetchRecentSchools(1)"
-                                class="rounded border border-gray-300 px-2 py-1.5 text-sm">
-                            <option value="">전체</option>
-                            <option value="community_college">Community College</option>
-                        </select>
-                        <label class="text-sm text-gray-600 ml-2">이름 검색</label>
-                        <input type="text" x-model="recentSchoolsQuery" placeholder="학교 이름 검색"
-                               @input="debounceSearch()"
-                               class="rounded border border-gray-300 px-2 py-1.5 text-sm w-40">
-                        <label class="text-sm text-gray-600 ml-2">페이지당</label>
-                        <select x-model="recentSchoolsPerPage" @change="recentSchoolsPage=1; fetchRecentSchools(1)"
-                                class="rounded border border-gray-300 px-2 py-1.5 text-sm">
-                            <option value="10">10개</option>
-                            <option value="20">20개</option>
-                        </select>
+                    <div class="w-full sm:w-auto">
+                        <div class="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end sm:gap-3">
+                            <div class="flex flex-col">
+                                <label class="text-xs text-gray-600">주</label>
+                                <select x-model="recentSchoolsState" @change="recentSchoolsPage=1; fetchRecentSchools(1)"
+                                        class="rounded border border-gray-300 px-2 py-1.5 text-sm w-full sm:w-auto">
+                                    <option value="">전체</option>
+                                    <option value="CA">캘리포니아 (CA)</option>
+                                    <option value="TX">텍사스 (TX)</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col">
+                                <label class="text-xs text-gray-600">학교 타입</label>
+                                <select x-model="recentSchoolsType" @change="recentSchoolsPage=1; fetchRecentSchools(1)"
+                                        class="rounded border border-gray-300 px-2 py-1.5 text-sm w-full sm:w-auto">
+                                    <option value="">전체</option>
+                                    <option value="community_college">Community College</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col col-span-2 sm:col-span-1">
+                                <label class="text-xs text-gray-600">이름 검색</label>
+                                <input type="text" x-model="recentSchoolsQuery" placeholder="학교 이름 검색"
+                                       @input="debounceSearch()"
+                                       class="rounded border border-gray-300 px-2 py-1.5 text-sm w-full sm:w-56">
+                            </div>
+                            <div class="flex flex-col">
+                                <label class="text-xs text-gray-600">페이지당</label>
+                                <select x-model="recentSchoolsPerPage" @change="recentSchoolsPage=1; fetchRecentSchools(1)"
+                                        class="rounded border border-gray-300 px-2 py-1.5 text-sm w-full sm:w-auto">
+                                    <option value="10">10개</option>
+                                    <option value="20">20개</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="overflow-x-auto">
+
+                <!-- Mobile: Card List -->
+                <div class="sm:hidden divide-y divide-gray-200">
+                    <template x-for="school in recentSchools" :key="school.id">
+                        <div class="p-4 hover:bg-gray-50 cursor-pointer" @click="openSchoolDetail(school.id)">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="font-medium text-gray-900 truncate" x-text="school.name"></div>
+                                    <div class="text-xs text-gray-500 mt-1" x-text="(school.city || '-') + ', ' + (school.state || '-')"></div>
+                                </div>
+                                <div class="flex-shrink-0">
+                                    <span class="px-2 py-1 rounded text-xs font-medium"
+                                          :class="statusBadgeClass(school.crawl_status)"
+                                          :title="school.crawl_message || ''"
+                                          x-text="statusLabel(school.crawl_status)">
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="mt-2 text-xs text-gray-500 break-all">
+                                <a :href="school.website"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="text-blue-600 hover:underline"
+                                   @click.stop>
+                                    <span x-text="school.website"></span>
+                                </a>
+                            </div>
+
+                            <div class="mt-2 space-y-1 text-sm">
+                                <div x-show="school.international_email" class="text-blue-600 break-all">
+                                    📧 <span x-text="school.international_email"></span>
+                                </div>
+                                <div x-show="school.international_phone" class="text-green-600 break-all">
+                                    📞 <span x-text="school.international_phone"></span>
+                                </div>
+                                <div x-show="!school.international_email && !school.international_phone" class="text-gray-400 text-sm">
+                                    연락처 정보 없음
+                                </div>
+                            </div>
+
+                            <div class="mt-2 text-xs text-gray-500">
+                                업데이트: <span x-text="formatDate(school.updated_at)"></span>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="recentSchools.length === 0" class="p-4 text-center text-sm text-gray-500">
+                        표시할 학교가 없습니다.
+                    </div>
+                </div>
+
+                <!-- Desktop/Tablet: Table -->
+                <div class="hidden sm:block overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
@@ -275,7 +337,7 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="px-6 py-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 bg-gray-50">
+                <div class="px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-gray-50">
                     <p class="text-sm text-gray-600">
                         총 <span class="font-semibold" x-text="recentSchoolsTotal"></span>개 중
                         <span x-show="recentSchoolsTotal > 0" x-text="(recentSchoolsPage - 1) * recentSchoolsPerPage + 1"></span>
@@ -283,7 +345,7 @@
                         –
                         <span x-text="Math.min(recentSchoolsPage * recentSchoolsPerPage, recentSchoolsTotal)"></span> 표시
                     </p>
-                    <div class="flex items-center gap-1">
+                    <div class="flex items-center gap-1 max-w-full overflow-x-auto py-1">
                         <button @click="fetchRecentSchools(recentSchoolsPage - 1)"
                                 :disabled="recentSchoolsPage <= 1"
                                 class="px-3 py-1 rounded border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200">
@@ -307,13 +369,49 @@
 
             <!-- Failed Sites -->
             <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <h2 class="text-xl font-semibold text-gray-900">실패한 사이트 (SSL 검증 오류)</h2>
                     <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium"
                           x-text="'총 ' + failedSites.length + '개'">
                     </span>
                 </div>
-                <div class="overflow-x-auto">
+
+                <!-- Mobile: Card List -->
+                <div class="sm:hidden divide-y divide-gray-200">
+                    <template x-for="site in failedSites" :key="site.website">
+                        <div class="p-4 hover:bg-gray-50 cursor-pointer" @click="openFailedSiteDetail(site)">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-medium text-gray-900 truncate" x-text="site.name"></div>
+                                    <div class="text-xs text-gray-500 mt-1">
+                                        최초 실패: <span x-text="formatDate(site.first_failed_at)"></span>
+                                        <span class="mx-1">|</span>
+                                        재시도: <span x-text="site.retry_count || 0"></span>회
+                                    </div>
+                                </div>
+                                <div class="flex-shrink-0">
+                                    <span class="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-medium"
+                                          x-text="(site.retry_count || 0) + '회'">
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-xs break-all">
+                                <a :href="site.website" target="_blank" rel="noopener noreferrer"
+                                   class="text-blue-600 hover:text-blue-800"
+                                   @click.stop>
+                                    <span x-text="site.website"></span>
+                                </a>
+                            </div>
+                            <div class="mt-2 text-xs text-gray-600 break-words" x-text="site.error_message"></div>
+                        </div>
+                    </template>
+                    <div x-show="failedSites.length === 0" class="p-4 text-center text-sm text-gray-500">
+                        실패한 사이트가 없습니다.
+                    </div>
+                </div>
+
+                <!-- Desktop/Tablet: Table -->
+                <div class="hidden sm:block overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
@@ -378,10 +476,10 @@
 
             <!-- Recent Logs -->
             <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <h2 class="text-xl font-semibold text-gray-900">📝 최근 로그</h2>
                     <button @click="fetchLogs()" 
-                            class="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded transition">
+                            class="w-full sm:w-auto text-sm px-3 py-2 sm:py-1 bg-gray-100 hover:bg-gray-200 rounded transition">
                         새로고침
                     </button>
                 </div>
