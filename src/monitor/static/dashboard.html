@@ -11,44 +11,20 @@
         .pulse-dot {
             animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
-        /* Simple tooltip helper (no external deps). */
-        .tooltip {
-            position: relative;
-            display: inline-flex;
-            align-items: center;
-        }
-        .tooltip .tooltip-bubble {
-            visibility: hidden;
-            opacity: 0;
-            transition: opacity 0.15s ease-in-out;
-            position: absolute;
-            z-index: 50;
-            left: 50%;
-            transform: translateX(-50%);
-            bottom: calc(100% + 8px);
-            width: 300px;
-            max-width: 75vw;
+        /* Global tooltip (fixed overlay to avoid clipping in modals/scroll containers). */
+        .global-tooltip {
+            position: fixed;
+            z-index: 9999;
+            pointer-events: none;
+            width: 320px;
+            max-width: calc(100vw - 16px);
             background: #111827; /* gray-900 */
             color: #fff;
             border-radius: 8px;
             padding: 10px 12px;
             font-size: 12px;
             line-height: 1.4;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-        }
-        .tooltip .tooltip-bubble::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            border-width: 6px;
-            border-style: solid;
-            border-color: #111827 transparent transparent transparent;
-        }
-        .tooltip:hover .tooltip-bubble {
-            visibility: visible;
-            opacity: 1;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
         }
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -669,29 +645,29 @@
                         <h4 class="font-semibold text-blue-900">
                             📊 Scorecard Level 1 데이터
                         </h4>
-                        <div class="tooltip">
-                            <span class="text-blue-700 cursor-help select-none" aria-label="Scorecard 도움말">ℹ️</span>
-                            <div class="tooltip-bubble">
-                                <div class="font-semibold mb-1">이 데이터는 무엇인가요?</div>
-                                <div>
-                                    미국 교육부(Department of Education)에서 제공하는 College Scorecard의 정량 지표입니다.
-                                    학교/코호트에 따라 일부 값은 제공되지 않을 수 있으며, 매칭 성공 시에만 채워집니다.
-                                </div>
-                            </div>
-                        </div>
+                        <span
+                            class="text-blue-700 cursor-help select-none"
+                            aria-label="Scorecard 도움말"
+                            @mouseenter="tooltipShow($event,
+                                '이 데이터는 무엇인가요?',
+                                '미국 교육부(Department of Education)에서 제공하는 College Scorecard의 정량 지표입니다. 학교/코호트에 따라 일부 값은 제공되지 않을 수 있으며, 매칭 성공 시에만 채워집니다.',
+                                '출처: U.S. Department of Education College Scorecard API')"
+                            @mouseleave="tooltipHide()"
+                        >ℹ️</span>
                     </div>
                     <div class="grid grid-cols-2 gap-4 text-sm">
                         <div x-show="selectedSchool?.graduation_rate" class="bg-white rounded p-3">
                             <div class="flex items-center gap-1">
                                 <p class="text-gray-600">졸업률</p>
-                                <div class="tooltip">
-                                    <span class="text-gray-400 cursor-help select-none text-xs" aria-label="졸업률 설명">ⓘ</span>
-                                    <div class="tooltip-bubble">
-                                        <div class="font-semibold mb-1">졸업률(Graduation Rate)</div>
-                                        <div>일반적으로 150% 기간 내(예: 4년 과정이면 6년 내) 학위 취득 비율입니다.</div>
-                                        <div class="mt-2 text-gray-200">출처: College Scorecard API (latest.completion)</div>
-                                    </div>
-                                </div>
+                                <span
+                                    class="text-gray-400 cursor-help select-none text-xs"
+                                    aria-label="졸업률 설명"
+                                    @mouseenter="tooltipShow($event,
+                                        '졸업률(Graduation Rate)',
+                                        '일반적으로 150% 기간 내(예: 4년 과정이면 6년 내) 학위 취득 비율입니다.',
+                                        '출처: College Scorecard API (latest.completion)')"
+                                    @mouseleave="tooltipHide()"
+                                >ⓘ</span>
                             </div>
                             <p class="text-2xl font-bold text-blue-600">
                                 <span x-text="selectedSchool?.graduation_rate"></span>%
@@ -701,14 +677,15 @@
                         <div x-show="selectedSchool?.average_salary" class="bg-white rounded p-3">
                             <div class="flex items-center gap-1">
                                 <p class="text-gray-600">평균 연봉</p>
-                                <div class="tooltip">
-                                    <span class="text-gray-400 cursor-help select-none text-xs" aria-label="평균 연봉 설명">ⓘ</span>
-                                    <div class="tooltip-bubble">
-                                        <div class="font-semibold mb-1">평균 연봉(Average Salary)</div>
-                                        <div>입학 후 일정 기간(예: 6년/10년) 시점의 소득 지표(주로 median earnings)를 의미합니다.</div>
-                                        <div class="mt-2 text-gray-200">출처: College Scorecard API (latest.earnings)</div>
-                                    </div>
-                                </div>
+                                <span
+                                    class="text-gray-400 cursor-help select-none text-xs"
+                                    aria-label="평균 연봉 설명"
+                                    @mouseenter="tooltipShow($event,
+                                        '평균 연봉(Average Salary)',
+                                        '입학 후 일정 기간(예: 6년/10년) 시점의 소득 지표(주로 median earnings)를 의미합니다.',
+                                        '출처: College Scorecard API (latest.earnings)')"
+                                    @mouseleave="tooltipHide()"
+                                >ⓘ</span>
                             </div>
                             <p class="text-2xl font-bold text-green-600">
                                 $<span x-text="selectedSchool?.average_salary ? selectedSchool.average_salary.toLocaleString() : '-'"></span>
@@ -718,14 +695,15 @@
                         <div x-show="selectedSchool?.acceptance_rate" class="bg-white rounded p-3">
                             <div class="flex items-center gap-1">
                                 <p class="text-gray-600">입학률</p>
-                                <div class="tooltip">
-                                    <span class="text-gray-400 cursor-help select-none text-xs" aria-label="입학률 설명">ⓘ</span>
-                                    <div class="tooltip-bubble">
-                                        <div class="font-semibold mb-1">입학률(Acceptance Rate)</div>
-                                        <div>지원자 대비 합격자 비율입니다. 값이 낮을수록 경쟁이 치열할 수 있습니다.</div>
-                                        <div class="mt-2 text-gray-200">출처: College Scorecard API (latest.admissions)</div>
-                                    </div>
-                                </div>
+                                <span
+                                    class="text-gray-400 cursor-help select-none text-xs"
+                                    aria-label="입학률 설명"
+                                    @mouseenter="tooltipShow($event,
+                                        '입학률(Acceptance Rate)',
+                                        '지원자 대비 합격자 비율입니다. 값이 낮을수록 경쟁이 치열할 수 있습니다.',
+                                        '출처: College Scorecard API (latest.admissions)')"
+                                    @mouseleave="tooltipHide()"
+                                >ⓘ</span>
                             </div>
                             <p class="text-2xl font-bold text-purple-600">
                                 <span x-text="selectedSchool?.acceptance_rate"></span>%
@@ -735,14 +713,15 @@
                         <div x-show="selectedSchool?.employment_rate" class="bg-white rounded p-3">
                             <div class="flex items-center gap-1">
                                 <p class="text-gray-600">취업률</p>
-                                <div class="tooltip">
-                                    <span class="text-gray-400 cursor-help select-none text-xs" aria-label="취업률 설명">ⓘ</span>
-                                    <div class="tooltip-bubble">
-                                        <div class="font-semibold mb-1">취업률(Employment Rate)</div>
-                                        <div>현재 크롤러가 수집/추정하는 취업 관련 지표입니다(Scorecard 값과 다를 수 있음).</div>
-                                        <div class="mt-2 text-gray-200">출처: 크롤러 수집 결과(website/문서/구조화 데이터)</div>
-                                    </div>
-                                </div>
+                                <span
+                                    class="text-gray-400 cursor-help select-none text-xs"
+                                    aria-label="취업률 설명"
+                                    @mouseenter="tooltipShow($event,
+                                        '취업률(Employment Rate)',
+                                        '현재 크롤러가 수집/추정하는 취업 관련 지표입니다(Scorecard 값과 다를 수 있음).',
+                                        '출처: 크롤러 수집 결과(website/문서/구조화 데이터)')"
+                                    @mouseleave="tooltipHide()"
+                                >ⓘ</span>
                             </div>
                             <p class="text-2xl font-bold text-orange-600">
                                 <span x-text="selectedSchool?.employment_rate"></span>%
@@ -760,54 +739,58 @@
                 <div x-show="selectedSchool && !detailLoading" class="space-y-3">
                     <div class="flex items-center gap-2">
                         <h4 class="font-semibold text-gray-900">수집 데이터</h4>
-                        <div class="tooltip">
-                            <span class="text-gray-400 cursor-help select-none text-xs" aria-label="수집 데이터 도움말">ⓘ</span>
-                            <div class="tooltip-bubble">
-                                <div class="font-semibold mb-1">수집 데이터는 무엇인가요?</div>
-                                <div>크롤러가 각 학교 웹사이트/문서에서 best-effort로 수집한 구조화(JSON) 정보입니다.</div>
-                                <div class="mt-2 text-gray-200">출처: college-crawler</div>
-                            </div>
-                        </div>
+                        <span
+                            class="text-gray-400 cursor-help select-none text-xs"
+                            aria-label="수집 데이터 도움말"
+                            @mouseenter="tooltipShow($event,
+                                '수집 데이터는 무엇인가요?',
+                                '크롤러가 각 학교 웹사이트/문서에서 best-effort로 수집한 구조화(JSON) 정보입니다.',
+                                '출처: college-crawler')"
+                            @mouseleave="tooltipHide()"
+                        >ⓘ</span>
                     </div>
                     <div class="bg-gray-50 rounded p-4 text-sm">
                         <div class="flex items-center gap-1 mb-2">
                             <p class="text-gray-600">ESL 프로그램</p>
-                            <div class="tooltip">
-                                <span class="text-gray-400 cursor-help select-none text-xs" aria-label="ESL 프로그램 설명">ⓘ</span>
-                                <div class="tooltip-bubble">
-                                    <div class="font-semibold mb-1">ESL 프로그램</div>
-                                    <div>영어 어학(ESL) 과정/지원 여부 등 관련 정보를 JSON 형태로 저장합니다.</div>
-                                    <div class="mt-2 text-gray-200">출처: 크롤러 수집 (schools.esl_program)</div>
-                                </div>
-                            </div>
+                            <span
+                                class="text-gray-400 cursor-help select-none text-xs"
+                                aria-label="ESL 프로그램 설명"
+                                @mouseenter="tooltipShow($event,
+                                    'ESL 프로그램',
+                                    '영어 어학(ESL) 과정/지원 여부 등 관련 정보를 JSON 형태로 저장합니다.',
+                                    '출처: 크롤러 수집 (schools.esl_program)')"
+                                @mouseleave="tooltipHide()"
+                            >ⓘ</span>
                         </div>
                         <pre class="whitespace-pre-wrap break-words text-xs text-gray-800" x-text="formatDetailValue(selectedSchool?.esl_program)"></pre>
                     </div>
                     <div class="bg-gray-50 rounded p-4 text-sm">
                         <div class="flex items-center gap-1 mb-2">
                             <p class="text-gray-600">유학생 지원</p>
-                            <div class="tooltip">
-                                <span class="text-gray-400 cursor-help select-none text-xs" aria-label="유학생 지원 설명">ⓘ</span>
-                                <div class="tooltip-bubble">
-                                    <div class="font-semibold mb-1">유학생 지원</div>
-                                    <div>국제학생 오피스/비자/오리엔테이션/상담 등 지원 정보를 JSON 형태로 저장합니다.</div>
-                                    <div class="mt-2 text-gray-200">출처: 크롤러 수집 (schools.international_support)</div>
-                                </div>
-                            </div>
+                            <span
+                                class="text-gray-400 cursor-help select-none text-xs"
+                                aria-label="유학생 지원 설명"
+                                @mouseenter="tooltipShow($event,
+                                    '유학생 지원',
+                                    '국제학생 오피스/비자/오리엔테이션/상담 등 지원 정보를 JSON 형태로 저장합니다.',
+                                    '출처: 크롤러 수집 (schools.international_support)')"
+                                @mouseleave="tooltipHide()"
+                            >ⓘ</span>
                         </div>
                         <pre class="whitespace-pre-wrap break-words text-xs text-gray-800" x-text="formatDetailValue(selectedSchool?.international_support)"></pre>
                     </div>
                     <div class="bg-gray-50 rounded p-4 text-sm">
                         <div class="flex items-center gap-1 mb-2">
                             <p class="text-gray-600">시설 정보</p>
-                            <div class="tooltip">
-                                <span class="text-gray-400 cursor-help select-none text-xs" aria-label="시설 정보 설명">ⓘ</span>
-                                <div class="tooltip-bubble">
-                                    <div class="font-semibold mb-1">시설 정보</div>
-                                    <div>기숙사/도서관/체육관 등 학교 시설 관련 정보를 JSON 형태로 저장합니다.</div>
-                                    <div class="mt-2 text-gray-200">출처: 크롤러 수집 (schools.facilities)</div>
-                                </div>
-                            </div>
+                            <span
+                                class="text-gray-400 cursor-help select-none text-xs"
+                                aria-label="시설 정보 설명"
+                                @mouseenter="tooltipShow($event,
+                                    '시설 정보',
+                                    '기숙사/도서관/체육관 등 학교 시설 관련 정보를 JSON 형태로 저장합니다.',
+                                    '출처: 크롤러 수집 (schools.facilities)')"
+                                @mouseleave="tooltipHide()"
+                            >ⓘ</span>
                         </div>
                         <pre class="whitespace-pre-wrap break-words text-xs text-gray-800" x-text="formatDetailValue(selectedSchool?.facilities)"></pre>
                     </div>
@@ -907,6 +890,19 @@
         </div>
     </div>
 
+    <!-- Global Tooltip Overlay (fixed to avoid clipping) -->
+    <div
+        x-show="tooltip.visible"
+        x-cloak
+        id="global-tooltip"
+        class="global-tooltip"
+        :style="`left: ${tooltip.x}px; top: ${tooltip.y}px;`"
+    >
+        <div class="font-semibold mb-1" x-text="tooltip.title"></div>
+        <div x-text="tooltip.body"></div>
+        <div class="mt-2 text-gray-200" x-show="tooltip.source" x-text="tooltip.source"></div>
+    </div>
+
     <!-- Footer -->
     <footer class="mt-12 pb-8 text-center text-sm text-gray-500">
         <p>College Crawler Monitor v1.0.0 | 
@@ -945,12 +941,24 @@
                 failedSiteLogs: [],
                 failedDetailLoading: false,
                 failedDetailError: '',
+                tooltip: {
+                    visible: false,
+                    title: '',
+                    body: '',
+                    source: '',
+                    x: 0,
+                    y: 0,
+                },
 
                 async init() {
                     await this.fetchData();
                     await this.fetchLogs();
                     await this.fetchRecentSchools(1);
                     await this.fetchFailedSites();
+
+                    // 스크롤/리사이즈 시 툴팁이 화면에 고정되어 어색해지는 것을 방지
+                    window.addEventListener('scroll', () => this.tooltipHide(), true);
+                    window.addEventListener('resize', () => this.tooltipHide(), true);
                     
                     // 자동 새로고침 (30초마다)
                     this.refreshInterval = setInterval(() => {
@@ -961,6 +969,45 @@
                             this.fetchRecentSchools(this.recentSchoolsPage);
                         }
                     }, 30000);
+                },
+
+                tooltipShow(event, title, body, source = '') {
+                    const target = (event && (event.currentTarget || event.target)) || null;
+                    if (!target || typeof target.getBoundingClientRect !== 'function') return;
+
+                    const rect = target.getBoundingClientRect();
+                    this.tooltip.visible = true;
+                    this.tooltip.title = String(title || '');
+                    this.tooltip.body = String(body || '');
+                    this.tooltip.source = String(source || '');
+
+                    // DOM 렌더 후 실제 tooltip 크기를 기반으로 위치 보정
+                    this.$nextTick(() => {
+                        const el = document.getElementById('global-tooltip');
+                        if (!el) return;
+                        const w = el.offsetWidth || 320;
+                        const h = el.offsetHeight || 0;
+
+                        const padding = 8;
+                        const centerX = rect.left + rect.width / 2;
+                        let x = centerX - w / 2;
+                        x = Math.max(padding, Math.min(x, window.innerWidth - w - padding));
+
+                        // 기본은 위쪽, 위 공간이 부족하면 아래쪽으로
+                        let y = rect.top - h - 10;
+                        if (y < padding) {
+                            y = rect.bottom + 10;
+                        }
+                        // 아래도 넘치면 화면 안으로 클램프
+                        y = Math.max(padding, Math.min(y, window.innerHeight - h - padding));
+
+                        this.tooltip.x = Math.round(x);
+                        this.tooltip.y = Math.round(y);
+                    });
+                },
+
+                tooltipHide() {
+                    this.tooltip.visible = false;
                 },
 
                 debounceSearch() {
