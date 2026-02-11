@@ -131,7 +131,7 @@
                     <h2 class="text-xl font-semibold text-gray-900">📊 크롤링 통계</h2>
                 </div>
                 <div class="p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div>
                             <div class="text-center">
                                 <p class="text-4xl font-bold text-green-600" 
@@ -146,6 +146,14 @@
                                    x-text="status.crawling?.failed || 0">
                                 </p>
                                 <p class="text-sm text-gray-600 mt-2">실패</p>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-center">
+                                <p class="text-4xl font-bold text-yellow-600"
+                                   x-text="status.crawling?.skipped || 0">
+                                </p>
+                                <p class="text-sm text-gray-600 mt-2">건너뜀</p>
                             </div>
                         </div>
                         <div>
