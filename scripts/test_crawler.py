@@ -29,9 +29,6 @@ def test_crawler():
         }
     ]
     
-    output_dir = Path(__file__).parent.parent / 'data' / 'crawled'
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
     logger.info("🧪 크롤러 테스트 시작\n")
     
     for school in test_schools:
@@ -43,10 +40,7 @@ def test_crawler():
             with SchoolCrawler(school['name'], school['website']) as crawler:
                 # 크롤링 실행
                 data = crawler.crawl_all()
-                
-                # 결과 저장
-                crawler.save_to_json(output_dir)
-                
+
                 # 결과 출력
                 crawled = data.get('crawled_data', {})
                 logger.info(f"\n✅ 크롤링 완료:")
@@ -70,7 +64,6 @@ def test_crawler():
     
     logger.info(f"\n{'='*60}")
     logger.info("🎉 테스트 완료")
-    logger.info(f"📁 결과 저장 위치: {output_dir.absolute()}")
     logger.info(f"{'='*60}\n")
 
 

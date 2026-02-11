@@ -2,7 +2,6 @@
 학교 정보 크롤러
 """
 
-import json
 from typing import Dict, Any, Optional
 from pathlib import Path
 import sys
@@ -207,20 +206,3 @@ class SchoolCrawler(BaseCrawler):
         else:
             logger.warning("Campus Life 페이지를 찾을 수 없음")
     
-    def save_to_json(self, output_dir: Path) -> None:
-        """
-        크롤링 결과를 JSON 파일로 저장
-        
-        Args:
-            output_dir: 출력 디렉토리
-        """
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 파일명: 학교 이름 (공백을 언더스코어로)
-        filename = self.school_name.replace(' ', '_').replace('–', '-') + '.json'
-        filepath = output_dir / filename
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(self.data, f, ensure_ascii=False, indent=2)
-        
-        logger.info(f"💾 결과 저장: {filepath}")

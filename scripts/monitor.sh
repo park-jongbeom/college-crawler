@@ -38,11 +38,33 @@ if [ $? -ne 0 ]; then
 fi
 echo
 
-# 5. 크롤링 결과 통계
-echo "5️⃣ 크롤링 결과"
+# 5. DB 기반 크롤링 통계
+echo "5️⃣ 크롤링 통계 (DB)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-CRAWLED_COUNT=$(docker exec college-crawler find /app/data/crawled -name "*.json" 2>/dev/null | wc -l)
-echo "📁 저장된 크롤링 결과: ${CRAWLED_COUNT}개"
+docker exec college-crawler python - <<'PY' 2>/dev/null
+import sys
+from pathlib import Path
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, str(Path("/app")))
+from src.database.connection import get_db
+from src.database.models import School, AuditLog
+
+with get_db() as db:
+    total_schools = db.query(School).count()
+    last_24h = datetime.now(timezone.utc) - timedelta(days=1)
+    crawl_logs = db.query(AuditLog).filter(
+        AuditLog.action == "CRAWL",
+        AuditLog.created_at >= last_24h
+    ).all()
+    success = sum(
+        1 for log in crawl_logs
+        if isinstance(log.new_value, dict) and log.new_value.get("status") == "success"
+    )
+    failed = len(crawl_logs) - success
+    print(f"🏫 DB 저장 학교 수: {total_schools}개")
+    print(f"📈 최근 24시간 크롤링: 총 {len(crawl_logs)}건 / 성공 {success}건 / 실패 {failed}건")
+PY
 echo
 
 # 6. 데이터베이스 상태

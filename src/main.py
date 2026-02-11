@@ -121,7 +121,6 @@ def _record_crawl_audit(
 def crawl_single_school(
     name: str,
     website: str,
-    output_dir: Path,
     seed_school: Optional[Dict[str, Any]] = None,
 ) -> dict:
     """
@@ -130,7 +129,6 @@ def crawl_single_school(
     Args:
         name: 학교 이름
         website: 웹사이트 URL
-        output_dir: 출력 디렉토리
     """
     logger.info(f"\n{'='*60}")
     logger.info(f"크롤링 시작: {name}")
@@ -154,8 +152,6 @@ def crawl_single_school(
             if crawler.ssl_error_detected:
                 logger.warning(f"SSL 검증 실패로 저장을 건너뜀: {name}")
                 return result
-
-            crawler.save_to_json(output_dir)
 
             crawled = data.get("crawled_data", {})
             try:
@@ -236,13 +232,12 @@ def crawl_single_school(
     return result
 
 
-def crawl_all_schools(json_file: Path, output_dir: Path, limit: int = None) -> None:
+def crawl_all_schools(json_file: Path, limit: int = None) -> None:
     """
     모든 학교 크롤링
     
     Args:
         json_file: 학교 목록 JSON 파일
-        output_dir: 출력 디렉토리
         limit: 크롤링할 최대 학교 수 (None이면 전체)
     """
     schools = load_schools_list(json_file)
@@ -282,7 +277,7 @@ def crawl_all_schools(json_file: Path, output_dir: Path, limit: int = None) -> N
         logger.info(f"\n[{i}/{len(schools)}] {name}")
         
         try:
-            result = crawl_single_school(name, website, output_dir, seed_school=school)
+            result = crawl_single_school(name, website, seed_school=school)
             if result.get("ssl_error_detected", False):
                 failed_site_manager.add_ssl_failure(
                     name=name,
@@ -337,7 +332,7 @@ def crawl_all_schools(json_file: Path, output_dir: Path, limit: int = None) -> N
     logger.info(f"{'='*60}")
     logger.info(f"✅ 성공: {success_count}개")
     logger.info(f"❌ 실패: {fail_count}개")
-    logger.info(f"📁 출력 디렉토리: {output_dir.absolute()}")
+    logger.info("💾 저장 방식: DB 단일 저장")
 
 
 def main():
@@ -352,29 +347,25 @@ def main():
                        help='학교 웹사이트 URL (--school과 함께 사용)')
     parser.add_argument('--limit', type=int, 
                        help='크롤링할 최대 학교 수')
-    parser.add_argument('--output', type=str, default='data/crawled',
-                       help='출력 디렉토리 (기본: data/crawled)')
     
     args = parser.parse_args()
     
-    # 출력 디렉토리 설정
     project_root = Path(__file__).parent.parent
-    output_dir = project_root / args.output
     
     if args.command == 'test':
         # 테스트: 첫 번째 학교만 크롤링
         logger.info("🧪 테스트 모드: 첫 번째 학교만 크롤링")
         json_file = project_root / 'data' / 'schools_initial.json'
-        crawl_all_schools(json_file, output_dir, limit=1)
+        crawl_all_schools(json_file, limit=1)
         
     elif args.command == 'crawl':
         if args.school and args.website:
             # 특정 학교 크롤링
-            crawl_single_school(args.school, args.website, output_dir)
+            crawl_single_school(args.school, args.website)
         else:
             # 전체 학교 크롤링
             json_file = project_root / 'data' / 'schools_initial.json'
-            crawl_all_schools(json_file, output_dir, limit=args.limit)
+            crawl_all_schools(json_file, limit=args.limit)
 
 
 if __name__ == '__main__':
