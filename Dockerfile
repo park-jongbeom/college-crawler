@@ -24,8 +24,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     curl \
-    cron \
-    bash \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

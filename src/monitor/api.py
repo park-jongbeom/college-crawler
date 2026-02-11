@@ -250,9 +250,40 @@ async def get_crawling_stats() -> Dict[str, Any]:
     try:
         with get_db() as db:
             total_schools = db.query(School).count()
-            failed_sites_map = _failed_sites_by_website()
-            failed = len(failed_sites_map)
-            success = max(total_schools - failed, 0)
+            # 중요: 성공/실패 통계는 "실제 크롤링 이력(AuditLog)" 기준으로 계산해야 합니다.
+            # SSL 실패 사이트 목록(failed_sites.json)은 '스킵 후보'일 뿐, 성공/실패 결과의 근거가 아닙니다.
+            success = 0
+            failed = 0
+
+            latest_per_school = (
+                db.query(
+                    AuditLog.record_id.label("school_id"),
+                    func.max(AuditLog.created_at).label("last_crawl_at"),
+                )
+                .filter(
+                    AuditLog.table_name == "schools",
+                    AuditLog.action == "CRAWL",
+                )
+                .group_by(AuditLog.record_id)
+                .subquery()
+            )
+
+            latest_logs = (
+                db.query(AuditLog.record_id, AuditLog.new_value)
+                .join(
+                    latest_per_school,
+                    (AuditLog.record_id == latest_per_school.c.school_id)
+                    & (AuditLog.created_at == latest_per_school.c.last_crawl_at),
+                )
+                .all()
+            )
+
+            for _school_id, new_value in latest_logs:
+                status, _message = _extract_crawl_status(new_value)
+                if status == "success":
+                    success += 1
+                elif status == "failed":
+                    failed += 1
 
             # 최근 업데이트된 학교 수 (24시간)
             yesterday = datetime.now() - timedelta(days=1)
@@ -271,7 +302,10 @@ async def get_crawling_stats() -> Dict[str, Any]:
 
             latest_crawl_log = (
                 db.query(AuditLog)
-                .filter(AuditLog.action == "CRAWL")
+                .filter(
+                    AuditLog.table_name == "schools",
+                    AuditLog.action == "CRAWL",
+                )
                 .order_by(AuditLog.created_at.desc())
                 .first()
             )

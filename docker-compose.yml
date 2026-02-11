@@ -5,8 +5,6 @@ services:
   college-crawler:
     image: patrick5471/college-crawler:latest
     container_name: college-crawler
-    # cron 데몬 구동을 위해 root로 실행하되, 실제 크롤링은 crawler 유저로 실행합니다.
-    user: root
     env_file:
       - .env
     environment:
@@ -25,22 +23,8 @@ services:
     restart: unless-stopped
     networks:
       - crawler-network
-    # 주기적 크롤링: 매일 새벽 2시에 자동 실행
-    command: 
-      - bash
-      - -c
-      - |
-        # Dockerfile에서 cron/bash를 사전 설치합니다. (여기서 apt-get 금지)
-        # CRON_TZ로 컨테이너/호스트 TZ와 무관하게 KST 새벽 2시 실행을 보장합니다.
-        cat > /tmp/crontab <<'EOF'
-        CRON_TZ=Asia/Seoul
-        0 2 * * * su -s /bin/bash crawler -c 'cd /app && python src/main.py crawl >> /app/logs/cron.log 2>&1'
-        EOF
-        crontab /tmp/crontab
-
-        # cron 데몬 실행 (foreground 옵션이 없는 경우도 있어 daemonize 후 유지)
-        cron
-        tail -f /dev/null
+    # 주기적 크롤링: 파이썬 스케줄러(apscheduler)로 처리 (cron/root 불필요)
+    command: ["python", "-m", "src.scheduler"]
 
   monitor:
     image: patrick5471/college-crawler:latest
