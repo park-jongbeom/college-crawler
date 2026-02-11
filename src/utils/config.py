@@ -18,8 +18,8 @@ class Config:
     DATABASE_HOST: str = os.getenv('DATABASE_HOST', 'localhost')
     DATABASE_PORT: int = int(os.getenv('DATABASE_PORT', '5432'))
     DATABASE_NAME: str = os.getenv('DATABASE_NAME', 'ga_db')
-    DATABASE_USER: str = os.getenv('DATABASE_USER', 'postgres')
-    DATABASE_PASSWORD: str = os.getenv('DATABASE_PASSWORD', '')
+    DATABASE_USER: str = os.getenv('DATABASE_USER') or 'postgres'  # 빈 문자열도 기본값으로 대체
+    DATABASE_PASSWORD: str = os.getenv('DATABASE_PASSWORD') or ''
     
     @property
     def DATABASE_URL(self) -> str:
