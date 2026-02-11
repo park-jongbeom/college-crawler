@@ -589,7 +589,6 @@ async def get_recent_schools(
 
     try:
         with get_db() as db:
-            failed_sites_map = _failed_sites_by_website()
             use_school_cols = _school_crawl_columns_available(db)
             if use_school_cols:
                 # 하이브리드 설계: 최근 업데이트(정렬)는 schools.last_crawled_at을 우선 사용
@@ -641,7 +640,7 @@ async def get_recent_schools(
                     _build_recent_school_item(
                         school,
                         None,
-                        failed_sites_map.get(school.website or ""),
+                        None,
                     )
                     for school in schools
                 ]
@@ -675,7 +674,7 @@ async def get_recent_schools(
                     _build_recent_school_item(
                         school,
                         latest_logs_by_school.get(school.id),
-                        failed_sites_map.get(school.website or ""),
+                        None,
                     )
                     for school in schools
                 ]
@@ -749,7 +748,6 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
             school = db.query(School).filter(School.id == school_uuid).first()
             if not school:
                 raise HTTPException(status_code=404, detail="학교를 찾을 수 없습니다")
-            failed_site = _failed_sites_by_website().get(school.website or "")
 
             crawl_logs = (
                 db.query(AuditLog)
@@ -788,19 +786,6 @@ async def get_school_detail(school_id: str) -> Dict[str, Any]:
                             if school.last_crawl_data_updated_at
                             else None,
                         },
-                    },
-                )
-            if failed_site:
-                crawl_history.insert(
-                    0,
-                    {
-                        "id": "failed-site",
-                        "timestamp": failed_site.get("last_checked_at")
-                        or failed_site.get("first_failed_at"),
-                        "status": "failed",
-                        "message": failed_site.get("error_message")
-                        or "SSL 검증 실패",
-                        "raw": _json_safe(failed_site),
                     },
                 )
             if not crawl_history:
@@ -877,7 +862,38 @@ async def get_failed_sites() -> Dict[str, Any]:
         SSL 검증 실패 사이트 목록 및 집계 정보
     """
     try:
-        ssl_failures = failed_site_manager.get_failed_sites("ssl_verification_failed")
+        # 동기화 원칙: 하단 목록도 상단 통계/최근 업데이트와 동일하게 "DB 기준"으로 계산합니다.
+        # (운영에서 failed_sites.json과 DB가 어긋날 수 있으므로 UI는 DB를 신뢰)
+        with get_db() as db:
+            if _school_crawl_columns_available(db):
+                rows = (
+                    db.query(
+                        School.name,
+                        School.website,
+                        School.last_crawled_at,
+                        School.last_crawl_message,
+                    )
+                    .filter(School.last_crawl_status == "skipped")
+                    .filter(School.last_crawl_message.ilike("%SSL%"))
+                    .order_by(School.last_crawled_at.desc().nullslast())
+                    .limit(100)
+                    .all()
+                )
+                ssl_failures = [
+                    {
+                        "name": name,
+                        "website": website,
+                        "error_message": last_crawl_message or "SSL 검증 실패(자동 건너뜀)",
+                        "first_failed_at": last_crawled_at.isoformat() if last_crawled_at else None,
+                        "last_checked_at": last_crawled_at.isoformat() if last_crawled_at else None,
+                        "retry_count": 1,
+                        "skip": True,
+                    }
+                    for name, website, last_crawled_at, last_crawl_message in rows
+                ]
+            else:
+                # 폴백: 스키마 미적용 환경에서는 기존 파일 기반을 유지
+                ssl_failures = failed_site_manager.get_failed_sites("ssl_verification_failed")
         return {
             "ssl_failures": ssl_failures,
             "total_ssl_failures": len(ssl_failures),
@@ -898,56 +914,52 @@ async def get_failed_site_detail(website: str) -> Dict[str, Any]:
     if not website:
         raise HTTPException(status_code=400, detail="website 쿼리 파라미터가 필요합니다")
 
-    failed_site = _failed_sites_by_website().get(website)
-    if not failed_site:
-        raise HTTPException(status_code=404, detail="실패 사이트를 찾을 수 없습니다")
-
     try:
         with get_db() as db:
             school = db.query(School).filter(School.website == website).first()
             logs: List[Dict[str, Any]] = []
 
-            if school:
-                crawl_logs = (
-                    db.query(AuditLog)
-                    .filter(
-                        _crawl_auditlog_filter(),
-                        AuditLog.record_id == school.id,
-                    )
-                    .order_by(AuditLog.created_at.desc())
-                    .limit(50)
-                    .all()
+            if not school:
+                raise HTTPException(status_code=404, detail="학교를 찾을 수 없습니다")
+
+            crawl_logs = (
+                db.query(AuditLog)
+                .filter(
+                    _crawl_auditlog_filter(),
+                    AuditLog.record_id == school.id,
                 )
+                .order_by(AuditLog.created_at.desc())
+                .limit(50)
+                .all()
+            )
 
-                for log in crawl_logs:
-                    status, message = _extract_crawl_status(log.new_value)
-                    if status not in ("failed", "skipped"):
-                        continue
-                    logs.append(
-                        {
-                            "id": str(log.id),
-                            "timestamp": log.created_at.isoformat() if log.created_at else None,
-                            "status": status,
-                            "message": message,
-                            "raw": log.new_value if isinstance(log.new_value, dict) else {},
-                        }
-                    )
-
-            if not logs:
+            for log in crawl_logs:
+                status, message = _extract_crawl_status(log.new_value)
+                if status not in ("failed", "skipped"):
+                    continue
                 logs.append(
                     {
-                        "id": "failed-site",
-                        "timestamp": failed_site.get("last_checked_at")
-                        or failed_site.get("first_failed_at"),
-                        "status": "failed",
-                        "message": failed_site.get("error_message") or "SSL 검증 실패",
-                        "raw": failed_site,
+                        "id": str(log.id),
+                        "timestamp": log.created_at.isoformat() if log.created_at else None,
+                        "status": status,
+                        "message": message,
+                        "raw": _json_safe(log.new_value) if isinstance(log.new_value, dict) else {},
                     }
                 )
 
+            site = {
+                "name": school.name,
+                "website": school.website,
+                "error_message": school.last_crawl_message or "SSL 검증 실패(자동 건너뜀)",
+                "first_failed_at": school.last_crawled_at.isoformat() if school.last_crawled_at else None,
+                "last_checked_at": school.last_crawled_at.isoformat() if school.last_crawled_at else None,
+                "retry_count": 1,
+                "skip": True,
+            }
+
             return {
-                "site": failed_site,
-                "school_id": str(school.id) if school else None,
+                "site": site,
+                "school_id": str(school.id),
                 "logs": logs,
             }
     except HTTPException:
