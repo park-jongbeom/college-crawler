@@ -18,6 +18,9 @@ from src.utils.config import config
 
 logger = setup_logger(__name__)
 
+# robots.txt는 외부 서버 응답 지연으로 블로킹될 수 있어, 별도 짧은 타임아웃을 둡니다.
+ROBOTS_TXT_TIMEOUT_SECONDS = 5
+
 
 class BaseCrawler:
     """웹 크롤러 기본 클래스"""
@@ -46,12 +49,26 @@ class BaseCrawler:
         """robots.txt 파서 초기화"""
         try:
             robots_url = urljoin(self.base_url, '/robots.txt')
-            self.robots_parser = RobotFileParser()
-            self.robots_parser.set_url(robots_url)
-            self.robots_parser.read()
+            # RobotFileParser.read()는 urllib 기반으로 timeout 제어가 어렵고 블로킹될 수 있습니다.
+            # 운영 안정성을 위해 requests로 짧게 가져와서 parse()로 주입합니다.
+            timeout = min(int(getattr(config, "CRAWL_TIMEOUT", 30)), ROBOTS_TXT_TIMEOUT_SECONDS)
+            resp = self.session.get(robots_url, timeout=timeout)
+            if resp.status_code >= 400:
+                logger.warning(f"robots.txt HTTP {resp.status_code} (허용으로 진행): {robots_url}")
+                self.robots_parser = None
+                return
+
+            rp = RobotFileParser()
+            rp.set_url(robots_url)
+            rp.parse(resp.text.splitlines())
+            self.robots_parser = rp
             logger.debug(f"robots.txt 로드 성공: {robots_url}")
+        except requests.exceptions.RequestException as e:
+            # robots.txt 실패는 크롤링 중단 사유가 아니므로 허용으로 진행합니다.
+            logger.warning(f"robots.txt 로드 실패(허용으로 진행): {e}")
+            self.robots_parser = None
         except Exception as e:
-            logger.warning(f"robots.txt 로드 실패 (무시하고 진행): {e}")
+            logger.warning(f"robots.txt 로드 실패(허용으로 진행): {e}")
             self.robots_parser = None
     
     def can_fetch(self, url: str) -> bool:
