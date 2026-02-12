@@ -84,6 +84,24 @@ print("크롤링 시작")
 ### 필수 참조 문서
 - **개발 정책**: `docs/00_DEVELOPMENT_POLICY.md`
 - **데이터베이스 스키마**: `docs/DATABASE_SCHEMA.md` - 모든 DB 관련 작업 시 반드시 참조
+- **계획 인덱스**: `docs/PLANS_INDEX.md` - 전체 계획 구조 및 바로가기
+
+### 통합 계획 문서 (최우선 참조)
+AI 유학 상담 고도화 작업 시 반드시 다음 통합 계획 폴더를 참조하십시오:
+
+**위치**: `/media/ubuntu/data120g/ai-consulting-plans/`
+
+**핵심 문서**:
+- **마스터 계획**: `00_MASTER_PLAN/ai_유학_상담_고도화_마스터플랜.md` - 전체 로드맵, Level 1 완료 상태, 다음 단계 확인
+- **GraphRAG 구축**: `01_GRAPHRAG/` - Ontology 정의, Knowledge Graph 구축 계획
+- **Step 0 벤치마킹**: `01_GRAPHRAG/step0_오픈소스_벤치마킹.md` - Microsoft GraphRAG, LangChain 패턴 분석
+- **현재 RAG 시스템**: `02_RAG_CURRENT/` - 기존 벡터 검색 아키텍처
+
+**작업 시 반드시**:
+1. 세션 시작 시 `ai-consulting-plans/README.md` 먼저 읽기
+2. GraphRAG 관련 작업 시 `01_GRAPHRAG/` 폴더 참조
+3. 크롤링 고도화 시 `AI_ENHANCEMENT_PLAN_2026.md` 참조
+4. 새 기능 구현 전 해당 Phase의 완료 기준 확인
 
 ## 6. 프로젝트 특화 규칙
 

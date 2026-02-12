@@ -97,6 +97,10 @@ docs/*
 !docs/PRODUCTION_DEPLOYMENT.md
 !docs/DEPLOY_VERIFICATION_2026-02-11.md
 !docs/PROBLEM_1_PAGER_LEVEL1_COLLEGE_SCORECARD.md
+!docs/PLANS_INDEX.md
+
+# 통합 계획 문서는 별도 폴더에서 관리
+# /media/ubuntu/data120g/ai-consulting-plans/
 
 # Cursor
 .cursor/projects/**/agent-transcripts/
@@ -118,3 +122,6 @@ alembic/versions/*.pyc
 
 # Temporary files
 *.tmp
+
+!docs/PROBLEM_1_PAGER_STEP0_GRAPHRAG.md
+!docs/GRAPHRAG_BENCHMARK_REPORT.md
