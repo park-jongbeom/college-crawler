@@ -110,7 +110,7 @@ class TripleExtractionService:
             return []
 
         # 프롬프트 구성
-        prompt = TRIPLE_EXTRACTION_PROMPT.format(text=text)
+        prompt = TRIPLE_EXTRACTION_PROMPT.replace("{text}", text)
         if school_name:
             prompt = f"School context: {school_name}\n\n{prompt}"
 
