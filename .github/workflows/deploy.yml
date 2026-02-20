@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/**'
       - 'scripts/**'
+      - 'data/**'
       - 'requirements.txt'
       - 'Dockerfile'
       - 'docker-compose.yml'
