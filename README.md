@@ -84,6 +84,16 @@ python src/main.py crawl
 python src/main.py crawl --school "Los Angeles Trade-Technical College"
 ```
 
+### Triple 자동 수집 (Phase 2)
+
+단계(Phase 2)에서 Career/Program/Placement 페이지를 자동으로 탐색하여 Gemini Triples를 수집합니다. 환경변수 `GEMINI_API_KEY`가 있어야 Triples가 생성되며, `--limit`으로 대상 학교 수를 샘플링할 수 있습니다.
+
+```bash
+python src/main.py harvest --schools-file data/schools_initial_full.json --gemini-key "$GEMINI_API_KEY"
+```
+
+추출 결과는 기본적으로 `data/auto_triples.jsonl`에 한 줄당 한 학교 형태로 저장됩니다. 다른 출력 파일을 쓰려면 `--auto-output`을 지정하세요.
+
 ### 데이터베이스 확인
 
 ```bash

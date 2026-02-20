@@ -19,6 +19,7 @@ from src.crawlers.school_crawler import SchoolCrawler
 from src.database.connection import get_db
 from src.database.models import AuditLog, School
 from src.database.repository import SchoolRepository
+from src.services.auto_triple_collector import AutoTripleCollector
 from src.services.scorecard_enrichment_service import ScorecardEnrichmentService
 from src.utils.failed_sites import failed_site_manager
 from src.utils.logger import setup_logger
@@ -473,18 +474,50 @@ def crawl_all_schools(json_file: Path, limit: int = None) -> None:
     logger.info("💾 저장 방식: DB 단일 저장")
 
 
+def run_auto_triple_collection(
+    schools_file: Path,
+    *,
+    limit: Optional[int] = None,
+    gemini_key: str | None = None,
+    output: Optional[Path] = None,
+) -> None:
+    """Phase 2 자동 크롤링 확장 파이프라인을 실행합니다."""
+    collector = AutoTripleCollector(
+        schools_json=schools_file,
+        output_path=output or Path(__file__).parent.parent / "data" / "auto_triples.jsonl",
+        gemini_api_key=gemini_key,
+    )
+    summary = collector.run(limit=limit)
+    logger.info("AutoTripleCollector summary: %s", summary)
+
+
 def main():
     """메인 함수"""
     parser = argparse.ArgumentParser(description='College Crawler - 미국 대학 정보 수집')
-    
-    parser.add_argument('command', choices=['crawl', 'test'], 
-                       help='실행할 명령 (crawl: 크롤링 실행, test: 테스트 크롤링)')
-    parser.add_argument('--school', type=str, 
-                       help='크롤링할 특정 학교 이름')
-    parser.add_argument('--website', type=str, 
-                       help='학교 웹사이트 URL (--school과 함께 사용)')
-    parser.add_argument('--limit', type=int, 
-                       help='크롤링할 최대 학교 수')
+
+    parser.add_argument(
+        'command',
+        choices=['crawl', 'test', 'harvest'],
+        help='실행할 명령 (crawl: 전체/단일 학교 크롤링, test: 첫 학교 테스트, harvest: Triple 자동 수집)',
+    )
+    parser.add_argument('--school', type=str, help='크롤링할 특정 학교 이름')
+    parser.add_argument('--website', type=str, help='학교 웹사이트 URL (--school과 함께 사용)')
+    parser.add_argument('--limit', type=int, help='크롤링할 최대 학교 수 또는 harvest 샘플 수')
+    parser.add_argument(
+        '--schools-file',
+        type=str,
+        help='Triple 자동 수집 대상 학교 JSON (harvest 전용, 기본 data/schools_initial_full.json)',
+    )
+    parser.add_argument(
+        '--gemini-key',
+        type=str,
+        help='Triple 추출에 사용할 Gemini API 키 (harvest 전용)',
+    )
+    parser.add_argument(
+        '--auto-output',
+        type=str,
+        help='Triple 자동 수집 결과 출력 파일 경로 (harvest 전용)',
+    )
     
     args = parser.parse_args()
     
@@ -504,6 +537,15 @@ def main():
             # 전체 학교 크롤링
             json_file = project_root / 'data' / 'schools_initial.json'
             crawl_all_schools(json_file, limit=args.limit)
+    elif args.command == 'harvest':
+        schools_file = Path(args.schools_file) if args.schools_file else project_root / 'data' / 'schools_initial_full.json'
+        output_path = Path(args.auto_output) if args.auto_output else None
+        run_auto_triple_collection(
+            schools_file=schools_file,
+            limit=args.limit,
+            gemini_key=args.gemini_key,
+            output=output_path,
+        )
 
 
 if __name__ == '__main__':
