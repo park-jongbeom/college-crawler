@@ -17,6 +17,7 @@ services:
       - crawler_logs:/app/logs
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./src:/app/src  # Mount source for hot reload
+    user: "0:0" # Run as root to fix permission issues
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import sys; sys.exit(0)' || exit 1"]
       interval: 30s

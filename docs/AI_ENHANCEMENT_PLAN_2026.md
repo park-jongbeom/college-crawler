@@ -1740,3 +1740,46 @@ flowchart TD
 - v1.0 (2026-02-11): 초안 작성 (3단계 고도화 전략, TDD 적용, 자가 개선 루프)
 - v1.1 (2026-02-11): Part 4 추가 (AI 기반 적응형 크롤링, 통합 전략)
 - v2.0 (2026-02-12): Part 4 전면 개편 (Ontology 기반 Knowledge Graph 구축, GraphRAG 도입, Hybrid Search 설계)
+- v2.1 (2026-02-20): **Phase 1 완료 상태 반영** — GraphRAG MVP 전 단계 구현 및 검증 완료
+
+---
+
+## 📊 현재 진행 상황 (2026-02-20 기준)
+
+### ✅ Phase 1 완료 (GraphRAG MVP)
+
+#### ga-api-platform (Kotlin/Spring Boot)
+
+| 항목 | 상태 | 세부 내용 |
+|------|------|----------|
+| Hybrid Search 프로토타입 | ✅ 완료 | 벡터(40%) + 그래프(50%) + 선호도(10%) 가중치 확정 |
+| HybridRankingService | ✅ 완료 | 재랭킹 로직 SRP 분리, 5단계 정렬 규칙 적용 |
+| Skill 감지 로직 | ✅ 완료 | targetMajor/careerGoal에서 SKILL 엔티티 추출 |
+| EntityResolutionService | ✅ 완료 | TDD 8/8 통과, alias→canonical 역매핑, LoadingCache 적용 |
+| 전체 테스트 스위트 | ✅ 완료 | 181개 전부 통과 (Testcontainers 기반, RDS 의존 제거) |
+| 진단 로그 | ✅ 완료 | Graph Path 커버리지 및 점수 기여도 측정 로그 추가 |
+
+#### college-crawler (Python)
+
+| 항목 | 상태 | 세부 내용 |
+|------|------|----------|
+| AutoTripleCollector | ✅ 완료 | 단위 테스트 19개 신규 추가, 전체 46개 통과 |
+| UrlFinder | ✅ RED 완료 | TDD RED 단계 — 5개 실패 테스트 작성 완료 |
+| CrawlingPipeline | ✅ 완료 | ThreadPoolExecutor 병렬처리, 재시작 상태관리, 54개 전부 통과 |
+
+### 🚀 Phase 2 착수 준비 — 다음 단계
+
+| 단계 | 작업 | 설명 |
+|------|------|------|
+| **Step 3.1** | 84개 학교 대규모 크롤링 실행 | `docker exec -it college-crawler-1 python main.py run_crawling_pipeline` |
+| **Step 3.3** | UrlFinder TDD GREEN 구현 | RED 단계 완료 → 실제 구현으로 전환 |
+| **Step 4** | knowledge_triples 데이터 적재 검증 | 크롤링 완료 후 DB 적재 및 품질 확인 |
+
+### 📌 수정된 버그 목록 (Phase 1)
+
+| # | 파일 | 문제 | 수정 |
+|---|------|------|------|
+| 1 | `EntityResolutionProperties.kt` | Spring Boot 3.x에서 `@ConstructorBinding` 컴파일 에러 | 어노테이션 제거 |
+| 2 | `EntityResolutionService.kt` | `Cache<K,V>` → `get(key)` 단일 인자 호출 불가 | `LoadingCache<K,V>`로 타입 변경 |
+| 3 | `EntityResolutionService.kt:init` | alias→canonical 역매핑 누락 ("NYU" → "nyu" 반환) | init 블록에서 alias별 역매핑 추가 |
+| 4 | `MatchingEngineServiceVectorSearchFallbackTest` | `HybridRankingService` 의존성 주입 누락 | 생성자 주입 추가 |
