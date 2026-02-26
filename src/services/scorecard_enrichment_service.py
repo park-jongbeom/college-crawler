@@ -50,6 +50,7 @@ class ScorecardEnrichmentService:
                         "acceptance_rate_percent": stats.acceptance_rate_percent,
                         "graduation_rate_percent": stats.graduation_rate_percent,
                         "average_salary_usd": stats.average_salary_usd,
+                        "employment_rate_percent": stats.employment_rate_percent,
                     },
                 }
             }
@@ -68,7 +69,8 @@ class ScorecardEnrichmentService:
             update["graduation_rate"] = stats.graduation_rate_percent
         if stats.average_salary_usd is not None:
             update["average_salary"] = stats.average_salary_usd
+        if stats.employment_rate_percent is not None:
+            update["employment_rate"] = stats.employment_rate_percent
 
         # None 값은 제외(기존 유효값 덮어쓰기 방지)
         return {k: v for k, v in update.items() if v is not None}
-

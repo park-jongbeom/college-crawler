@@ -38,6 +38,7 @@ class ScorecardStats:
     acceptance_rate_percent: Optional[int]
     graduation_rate_percent: Optional[int]
     average_salary_usd: Optional[int]
+    employment_rate_percent: Optional[int] = None
 
 
 class CollegeScorecardClient:
@@ -200,6 +201,11 @@ class CollegeScorecardClient:
         # 10년차가 더 안정적인 지표인 경우가 많아 우선 사용합니다.
         salary = salary_10yr if salary_10yr is not None else salary_6yr
 
+        employment_rate_raw = completion.get("employment_rate")
+        if isinstance(employment_rate_raw, dict):
+            employment_rate_raw = employment_rate_raw.get("overall")
+        employment_rate_percent = StatisticsParser.parse_ratio_to_percent(employment_rate_raw)
+
         scorecard_id = item.get("id")
         try:
             scorecard_id_int = int(scorecard_id) if scorecard_id is not None else None
@@ -214,5 +220,5 @@ class CollegeScorecardClient:
             acceptance_rate_percent=admission_rate,
             graduation_rate_percent=graduation_rate,
             average_salary_usd=salary,
+            employment_rate_percent=employment_rate_percent,
         )
-
